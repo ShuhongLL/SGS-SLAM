@@ -17,7 +17,7 @@ from diff_gaussian_rasterization import GaussianRasterizer as Renderer
 
 from pytorch_msssim import ms_ssim
 from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
-loss_fn_alex = LearnedPerceptualImagePatchSimilarity(net_type='alex', normalize=True)
+loss_fn_alex = LearnedPerceptualImagePatchSimilarity(net_type='alex', normalize=True).cuda()
 
 def align(model, data):
     """Align two trajectories using the method of Horn (closed-form).
@@ -511,7 +511,6 @@ def eval(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_iters,
         psnr = calc_psnr(weighted_im, weighted_gt_im).mean()
         ssim = ms_ssim(weighted_im.unsqueeze(0).cpu(), weighted_gt_im.unsqueeze(0).cpu(), 
                         data_range=1.0, size_average=True)
-        loss_fn_alex = loss_fn_alex.to(device)
         lpips_score = loss_fn_alex(torch.clamp(weighted_im.unsqueeze(0), 0.0, 1.0),
                                     torch.clamp(weighted_gt_im.unsqueeze(0), 0.0, 1.0)).item()
 
@@ -756,7 +755,6 @@ def eval_nvs(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_ite
         psnr = calc_psnr(weighted_im, weighted_gt_im).mean()
         ssim = ms_ssim(weighted_im.unsqueeze(0).cpu(), weighted_gt_im.unsqueeze(0).cpu(), 
                         data_range=1.0, size_average=True)
-        loss_fn_alex = loss_fn_alex.to(device)
         lpips_score = loss_fn_alex(torch.clamp(weighted_im.unsqueeze(0), 0.0, 1.0),
                                     torch.clamp(weighted_gt_im.unsqueeze(0), 0.0, 1.0)).item()
 
