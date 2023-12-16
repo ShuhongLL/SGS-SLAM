@@ -6,11 +6,9 @@ scenes = ["room0", "room1", "room2",
           "office0", "office2",
           "office3", "office4"]
 
-primary_device="cuda:0" # The GaussianRasterizer uses the default cuda:0.
-                        # If you want to use other device, you have to modify
-                        # rasterize_points.cu and recompile the rasterizer.
+primary_device="cuda:1"
 seed = 0
-scene_name = "office3"
+scene_name = "office4"
 
 map_every = 1
 keyframe_every = 5

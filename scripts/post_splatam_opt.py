@@ -35,8 +35,9 @@ from datasets.gradslam_datasets import (
 from utils.common_utils import seed_everything, save_seq_params, save_params, save_params_ckpt, save_seq_params_ckpt
 from utils.recon_helpers import setup_camera
 from utils.gs_helpers import (
-    params2rendervar, params2depthplussilhouette,
+    params2rendervar, params2depthplussilhouette, semantics2rendervar,
     transformed_params2depthplussilhouette,
+    transformed_semantics2rendervar,
     transform_to_frame, report_progress, eval,
     l1_loss_v1, matrix_to_quaternion
 )
@@ -159,17 +160,26 @@ def initialize_params(init_pt_cld, num_frames, mean3_sq_dist):
     return params, variables
 
 
-def initialize_optimizer(params, lrs_dict):
+def initialize_optimizer(params, lrs_dict, params_opt_exclude):
     lrs = lrs_dict
-    param_groups = [{'params': [v], 'name': k, 'lr': lrs[k]} for k, v in params.items()]
+    param_groups = [{'params': [v], 'name': k, 'lr': lrs[k]} for k, v in params.items() \
+                    if k not in params_opt_exclude and k in lrs]
 
     return torch.optim.Adam(param_groups, lr=0.0, eps=1e-15)
 
 
-def initialize_first_timestep_from_ckpt(ckpt_path,dataset, num_frames, lrs_dict,
-                                        mean_sq_dist_method, device="cuda"):
+def initialize_first_timestep_from_ckpt(ckpt_path, dataset, num_frames, lrs_dict, mean_sq_dist_method,
+                                        device="cuda", load_semantics=False):
+    # Params dont need gradient
+    params_opt_exclude = set()
     # Get RGB-D Data & Camera Parameters
-    color, depth, intrinsics, pose = dataset[0]
+    if load_semantics:
+        color, depth, intrinsics, pose, semantic_id, semantic_color = dataset[0]
+        semantic_id = color.permute(2, 0, 1) # (H, W, 1) -> (1, H, W)
+        semantic_color = semantic_color.permute(2, 0, 1) / 255 # (H, W, C) -> (C, H, W)
+        params_opt_exclude.add("semantic_ids")
+    else:
+        color, depth, intrinsics, pose = dataset[0]
 
     # Process RGB-D Data
     color = color.permute(2, 0, 1) / 255 # (H, W, C) -> (C, H, W)
@@ -193,27 +203,36 @@ def initialize_first_timestep_from_ckpt(ckpt_path,dataset, num_frames, lrs_dict,
     params = dict(np.load(ckpt_path, allow_pickle=True))
     variables = {}
 
-    for k in ['intrinsics', 'w2c', 'org_width', 'org_height', 'gt_w2c_all_frames']:
+    for k in ['intrinsics', 'w2c', 'org_width', 'org_height', 'gt_w2c_all_frames', 'keyframe_time_indices']:
     # for k in ['timestep','intrinsics', 'w2c', 'org_width', 'org_height', 'gt_w2c_all_frames']:
         params.pop(k)
 
     print(params.keys())
-    params = {k: torch.tensor(params[k]).cuda().float().requires_grad_(True) for k in params.keys()}
+    for k in params.keys():
+        if k in params_opt_exclude:
+            params[k] = torch.tensor(params[k]).cuda()
+        else:
+            params[k] = torch.tensor(params[k]).cuda().float().requires_grad_(True)
+
+    if load_semantics and 'semantic_ids' in params.keys():
+        if params['semantic_ids'].dim() == 1:
+            params['semantic_ids'] = params['semantic_ids'].unsqueeze(1)
+    
     variables['max_2D_radius'] = torch.zeros(params['means3D'].shape[0]).cuda().float()
     variables['means2D_gradient_accum'] = torch.zeros(params['means3D'].shape[0]).cuda().float()
     variables['denom'] = torch.zeros(params['means3D'].shape[0]).cuda().float()
     # variables['timestep'] = torch.zeros(params['means3D'].shape[0]).cuda().float()
     variables['timestep'] = torch.tensor(params['timestep']).cuda().float()
     params.pop('timestep')
-    optimizer = initialize_optimizer(params, lrs_dict)
+    optimizer = initialize_optimizer(params, lrs_dict, params_opt_exclude)
 
     # Initialize an estimate of scene radius for Gaussian-Splatting Densification
     variables['scene_radius'] = torch.max(depth)/2.0
 
-    return params, variables, optimizer, intrinsics, w2c, cam
+    return params, variables, optimizer, params_opt_exclude, intrinsics, w2c, cam
 
 
-def get_loss_gs(params, curr_data, variables, loss_weights):
+def get_loss_gs(params, curr_data, variables, loss_weights, load_semantics=False):
     # Initialize Loss Dictionary
     losses = {}
 
@@ -230,6 +249,14 @@ def get_loss_gs(params, curr_data, variables, loss_weights):
     depth_sil, _, _, = Renderer(raster_settings=curr_data['cam'])(**depth_sil_rendervar)
     depth = depth_sil[0, :, :].unsqueeze(0)
     silhouette = depth_sil[1, :, :]
+
+    # Semantic Color Rendering
+    if load_semantics:
+        semantic_rendervar = semantics2rendervar(params)
+        seg, _, _, = Renderer(raster_settings=curr_data['cam'])(**semantic_rendervar)
+        # Semantic color loss
+        losses['seg'] = 0.8 * l1_loss_v1(seg, curr_data['semantic_color']) + \
+            0.2 * (1.0 - calc_ssim(seg, curr_data['semantic_color']))
 
     # Get invalid Depth Mask
     valid_depth_mask = (curr_data['depth'] != 0.0)
@@ -379,6 +406,15 @@ def rgbd_slam(config: dict):
         dataset_config["ignore_bad"] = False
     if "use_train_split" not in dataset_config:
         dataset_config["use_train_split"] = True
+    if "load_semantics" not in dataset_config:
+        load_semantics = False
+        num_semantic_classes = 0
+    else:
+        load_semantics = dataset_config["load_semantics"]
+        num_semantic_classes = dataset_config["num_semantic_classes"]
+        semantic_color_all_frames_map = []
+        semantic_id_all_frames_map = []
+
     # Poses are relative to the first frame
     mapping_dataset = get_dataset(
         config_dict=gradslam_data_cfg,
@@ -393,6 +429,8 @@ def rgbd_slam(config: dict):
         relative_pose=True,
         ignore_bad=dataset_config["ignore_bad"],
         use_train_split=dataset_config["use_train_split"],
+        load_semantics=load_semantics,
+        num_semantic_classes=num_semantic_classes,
     )
 
     eval_dataset = get_dataset(
@@ -408,6 +446,8 @@ def rgbd_slam(config: dict):
         relative_pose=True,
         ignore_bad=dataset_config["ignore_bad"],
         use_train_split=dataset_config["use_train_split"],
+        load_semantics=load_semantics,
+        num_semantic_classes=num_semantic_classes,
     )
 
     num_frames = dataset_config["num_frames"]
@@ -419,11 +459,17 @@ def rgbd_slam(config: dict):
 
     # Initialize Parameters, Optimizer & Canoncial Camera parameters
     ckpt_path = config["data"]["param_ckpt_path"]
-    params, variables, optimizer, intrinsics, w2c, cam = initialize_first_timestep_from_ckpt(ckpt_path, mapping_dataset, num_frames, 
-                                                                                   config['train']['lrs_mapping'],
-                                                                                   config['mean_sq_dist_method'])
+    params, variables, optimizer, params_opt_exclude, intrinsics, \
+        w2c, cam = initialize_first_timestep_from_ckpt(ckpt_path, mapping_dataset, num_frames,
+                                                       config['train']['lrs_mapping'],
+                                                       config['mean_sq_dist_method'],
+                                                       load_semantics=load_semantics)
 
-    _, _, map_intrinsics, _ = mapping_dataset[0]
+    # Use the first frame coordinate
+    if load_semantics:
+        _, _, map_intrinsics, _, _, _ = mapping_dataset[0]
+    else:
+        _, _, map_intrinsics, _ = mapping_dataset[0]
 
     # Load all RGBD frames - Mapping dataloader
     color_all_frames_map = []
@@ -431,7 +477,14 @@ def rgbd_slam(config: dict):
     gt_w2c_all_frames_map = []
     gs_cams_all_frames_map = []
     for time_idx in range(num_frames):
-        color, depth, _, gt_pose = mapping_dataset[time_idx]
+        if load_semantics:
+            color, depth, _, gt_pose, semantic_id, semantic_color = mapping_dataset[time_idx]
+            semantic_id = semantic_id.permute(2, 0, 1)
+            semantic_color = semantic_color.permute(2, 0, 1) / 255
+            semantic_id_all_frames_map.append(semantic_id)
+            semantic_color_all_frames_map.append(semantic_color)
+        else:
+            color, depth, _, gt_pose = mapping_dataset[time_idx]
         # Process poses
         gt_w2c = torch.linalg.inv(gt_pose)
         # Process RGB-D Data
@@ -459,7 +512,12 @@ def rgbd_slam(config: dict):
         curr_gt_w2c = gt_w2c_all_frames_map[:iter_time_idx+1]
         curr_data = {'cam': cam, 'im': color, 'depth': depth, 'id': iter_time_idx, 
                      'intrinsics': intrinsics, 'w2c': w2c, 'iter_gt_w2c_list': curr_gt_w2c}
-       
+        if load_semantics:
+            semantic_id = semantic_id_all_frames_map[iter_time_idx]
+            semantic_color = semantic_color_all_frames_map[iter_time_idx]
+            curr_data['semantic_id'] = semantic_id
+            curr_data['semantic_color'] = semantic_color
+
         # Add new Gaussians to the scene based on the Silhouette
         # if time_idx > 0:
         #     params, variables = add_new_gaussians(params, variables, curr_data, 
@@ -471,7 +529,7 @@ def rgbd_slam(config: dict):
                            "Init/step": wandb_time_step})
 
         # Reset Optimizer & Learning Rates for Full Map Optimization
-        optimizer = initialize_optimizer(params, config['train']['lrs_mapping'])
+        optimizer = initialize_optimizer(params, config['train']['lrs_mapping'], params_opt_exclude)
         means3D_scheduler = get_expon_lr_func(lr_init=config['train']['lrs_mapping']['means3D'], 
                                               lr_final=config['train']['lrs_mapping_means3D_final'],
                                               lr_delay_mult=config['train']['lr_delay_mult'],
@@ -496,6 +554,9 @@ def rgbd_slam(config: dict):
                 iter_data = {'cam': iter_gs_cam, 'im': iter_color, 'depth': iter_depth, 
                              'id': iter_time_idx, 'intrinsics': map_intrinsics, 
                              'w2c': gt_w2c_all_frames_map[iter_time_idx], 'iter_gt_w2c_list': iter_gt_w2c}
+                if load_semantics:
+                    iter_data['semantic_id'] = semantic_id
+                    iter_data['semantic_color'] = semantic_color
                 # Loss for current frame
                 loss, variables, losses = get_loss_gs(params, iter_data, variables, config['train']['loss_weights'])
                 # Backprop
@@ -503,7 +564,8 @@ def rgbd_slam(config: dict):
                 with torch.no_grad():
                     # Gaussian-Splatting's Gradient-based Densification
                     if config['train']['use_gaussian_splatting_densification']:
-                        params, variables = densify(params, variables, optimizer, iter, config['train']['densify_dict'])
+                        params, variables = densify(params, variables, optimizer, iter, config['train']['densify_dict'],
+                                                    params_opt_exclude)
                         if config['use_wandb']:
                             wandb_run.log({"Number of Gaussians - Densification": params['means3D'].shape[0]})
                     # Optimizer Update
@@ -514,10 +576,10 @@ def rgbd_slam(config: dict):
                         if config['use_wandb']:
                             report_progress(params, iter_data, iter+1, progress_bar, iter_time_idx, sil_thres=config['train']['sil_thres'], 
                                             wandb_run=wandb_run, wandb_step=wandb_step, wandb_save_qual=config['wandb']['save_qual'],
-                                            mapping=True, online_time_idx=time_idx)
+                                            mapping=True, load_semantics=load_semantics, online_time_idx=time_idx)
                         else:
                             report_progress(params, iter_data, iter+1, progress_bar, iter_time_idx, sil_thres=config['train']['sil_thres'], 
-                                            mapping=True, online_time_idx=time_idx)
+                                            mapping=True, load_semantics=load_semantics, online_time_idx=time_idx)
                     else:
                         progress_bar.update(1)
                     # Eval Params at 7K Iterations
@@ -528,12 +590,12 @@ def rgbd_slam(config: dict):
                         eval_dir = os.path.join(output_dir, "eval_7k")
                         os.makedirs(eval_dir, exist_ok=True)
                         if config['use_wandb']:
-                            eval(eval_dataset, eval_params, eval_num_frames, eval_dir, sil_thres=config['train']['sil_thres'],
-                                 wandb_run=wandb_run, wandb_save_qual=config['wandb']['eval_save_qual'],
-                                 mapping_iters=config["train"]["num_iters_mapping"], add_new_gaussians=True)
+                            eval(eval_dataset, eval_params, eval_num_frames, eval_dir, sil_thres=config['train']['sil_thres'], wandb_run=wandb_run,
+                                 wandb_save_qual=config['wandb']['eval_save_qual'], mapping_iters=config["train"]["num_iters_mapping"], add_new_gaussians=True,
+                                 load_semantics=load_semantics)
                         else:
                             eval(eval_dataset, eval_params, eval_num_frames, eval_dir, sil_thres=config['train']['sil_thres'],
-                                 mapping_iters=config["train"]["num_iters_mapping"], add_new_gaussians=True)
+                                 mapping_iters=config["train"]["num_iters_mapping"], add_new_gaussians=True, load_semantics=load_semantics)
             if num_iters_mapping > 0:
                 progress_bar.close()
 

@@ -284,6 +284,30 @@ def params2depthplussilhouette(params, w2c):
     return rendervar
 
 
+def semantics2rendervar(params):
+    rendervar = {
+        'means3D': params['means3D'],
+        'colors_precomp': params['semantic_colors'],
+        'rotations': F.normalize(params['unnorm_rotations']),
+        'opacities': torch.sigmoid(params['logit_opacities']),
+        'scales': torch.exp(torch.tile(params['log_scales'], (1, 3))),
+        'means2D': torch.zeros_like(params['means3D'], requires_grad=True, device="cuda") + 0
+    }
+    return rendervar
+
+
+def transformed_semantics2rendervar(params, transformed_pts):
+    rendervar = {
+        'means3D': transformed_pts,
+        'colors_precomp': params['semantic_colors'],
+        'rotations': F.normalize(params['unnorm_rotations']),
+        'opacities': torch.sigmoid(params['logit_opacities']),
+        'scales': torch.exp(torch.tile(params['log_scales'], (1, 3))),
+        'means2D': torch.zeros_like(params['means3D'], requires_grad=True, device="cuda") + 0
+    }
+    return rendervar
+
+
 def transformed_params2depthplussilhouette(params, w2c, transformed_pts):
     rendervar = {
         'means3D': transformed_pts,
@@ -361,15 +385,17 @@ def report_loss(losses, wandb_run, wandb_step, tracking=False, mapping=False):
         
 
 def plot_rgbd_silhouette(color, depth, rastered_color, rastered_depth, presence_sil_mask, diff_depth_rmse,
-                         psnr, rmse, fig_title, plot_dir=None, plot_name=None, 
-                         save_plot=False, wandb_run=None, wandb_step=None, wandb_title=None):
+                         psnr, rmse, fig_title, plot_dir=None, plot_name=None, save_plot=False,
+                         seg=None, rastered_seg=None, wandb_run=None, wandb_step=None, wandb_title=None):
     # Determine Plot Aspect Ratio
     aspect_ratio = color.shape[2] / color.shape[1]
     fig_height = 8
     fig_width = 14/1.55
     fig_width = fig_width * aspect_ratio
+    # Adjust number of subplots and figure size based on 'seg' variable
+    num_cols = 4 if seg is not None else 3
     # Plot the Ground Truth and Rasterized RGB & Depth, along with Diff Depth & Silhouette
-    fig, axs = plt.subplots(2, 3, figsize=(fig_width, fig_height))
+    fig, axs = plt.subplots(2, num_cols, figsize=(fig_width, fig_height))
     axs[0, 0].imshow(color.cpu().permute(1, 2, 0))
     axs[0, 0].set_title("Ground Truth RGB")
     axs[0, 1].imshow(depth[0, :, :].cpu(), cmap='jet', vmin=0, vmax=6)
@@ -384,6 +410,13 @@ def plot_rgbd_silhouette(color, depth, rastered_color, rastered_depth, presence_
     diff_depth_rmse = diff_depth_rmse.cpu().squeeze(0)
     axs[1, 2].imshow(diff_depth_rmse, cmap='jet', vmin=0, vmax=1)
     axs[1, 2].set_title("Diff Depth RMSE")
+
+    if seg is not None:
+        axs[0, 3].imshow(seg.cpu().permute(1, 2, 0))
+        axs[0, 3].set_title("Ground Truth Semantic Map")
+        axs[1, 3].imshow(rastered_seg.cpu().permute(1, 2, 0))
+        axs[1, 3].set_title("Rasterized Semantic Map, IOU: xx")
+
     for ax in axs.flatten():
         ax.axis('off')
     fig.suptitle(fig_title, y=0.95, fontsize=16)
@@ -400,7 +433,8 @@ def plot_rgbd_silhouette(color, depth, rastered_color, rastered_depth, presence_
 
 
 def report_progress(params, data, i, progress_bar, iter_time_idx, sil_thres, every_i=1, qual_every_i=1, 
-                    tracking=False, mapping=False, wandb_run=None, wandb_step=None, wandb_save_qual=False, online_time_idx=None):
+                    tracking=False, mapping=False, load_semantics=False, wandb_run=None, wandb_step=None,
+                    wandb_save_qual=False, online_time_idx=None):
     if i % every_i == 0 or i == 1:
         if wandb_run is not None:
             if tracking:
@@ -422,6 +456,15 @@ def report_progress(params, data, i, progress_bar, iter_time_idx, sil_thres, eve
         presence_sil_mask = (silhouette > sil_thres)
 
         im, _, _, = Renderer(raster_settings=data['cam'])(**rendervar)
+
+        if load_semantics:
+            semantic_rendervar = semantics2rendervar(params)
+            rastered_seg, _, _, = Renderer(raster_settings=data['cam'])(**semantic_rendervar)
+            gt_seg = data['semantic_color']
+        else:
+            rastered_seg = None
+            gt_seg = None
+
         if tracking:
             psnr = calc_psnr(im * presence_sil_mask, data['im'] * presence_sil_mask).mean()
         else:
@@ -456,11 +499,11 @@ def report_progress(params, data, i, progress_bar, iter_time_idx, sil_thres, eve
             else:
                 fig_title = f"Time-Step: {online_time_idx} | Iter: {i} | Frame: {data['id']}"
             plot_rgbd_silhouette(data['im'], data['depth'], im, rastered_depth, presence_sil_mask, diff_depth_rmse,
-                                 psnr, rmse, fig_title, wandb_run=wandb_run, wandb_step=wandb_step, 
-                                 wandb_title=f"{stage} Qual Viz")
+                                 psnr, rmse, fig_title, seg=gt_seg, rastered_seg=rastered_seg, wandb_run=wandb_run,
+                                 wandb_step=wandb_step, wandb_title=f"{stage} Qual Viz")
 
 
-def eval(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_iters, add_new_gaussians,
+def eval(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_iters, add_new_gaussians, load_semantics=False,
          device="cuda", wandb_run=None, wandb_save_qual=False):
     print("Evaluating Final Parameters ...")
     psnr_list = []
@@ -473,7 +516,12 @@ def eval(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_iters, 
     gt_w2c_list = []
     for time_idx in tqdm(range(num_frames)):
         # Get RGB-D Data & Camera Parameters
-        color, depth, intrinsics, pose = dataset[time_idx]
+        if load_semantics:
+            color, depth, intrinsics, pose, semantic_id, semantic_color = dataset[time_idx]
+            semantic_id = semantic_id.permute(2, 0, 1) # (H, W, 1) -> (1, H, W)
+            semantic_color = semantic_color.permute(2, 0, 1) / 255 # (H, W, C) -> (C, H, W)
+        else:
+            color, depth, intrinsics, pose = dataset[time_idx]
         gt_w2c = torch.linalg.inv(pose)
         gt_w2c_list.append(gt_w2c)
         intrinsics = intrinsics[:3, :3]
@@ -493,6 +541,16 @@ def eval(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_iters, 
         # Define current frame data
         curr_data = {'cam': cam, 'im': color, 'depth': depth, 'id': time_idx, 'intrinsics': intrinsics, 'w2c': w2c}
 
+        if load_semantics:
+            curr_data['semantic_id'] = semantic_id
+            curr_data['semantic_color'] = semantic_color
+            semantic_rendervar = semantics2rendervar(final_params)
+            rastered_seg, _, _, = Renderer(raster_settings=curr_data['cam'])(**semantic_rendervar)
+            gt_seg = semantic_color
+        else:
+            rastered_seg = None
+            gt_seg = None
+
         # Initialize Render Variables
         rendervar = params2rendervar(final_params)
         depth_sil_rendervar = params2depthplussilhouette(final_params, w2c)
@@ -506,6 +564,7 @@ def eval(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_iters, 
         
         # Render RGB and Calculate PSNR
         im, radius, _, = Renderer(raster_settings=curr_data['cam'])(**rendervar)
+        
         if mapping_iters==0 and not add_new_gaussians:
             weighted_im = im * presence_sil_mask
             weighted_gt_im = curr_data['im'] * presence_sil_mask
@@ -542,13 +601,12 @@ def eval(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_iters, 
         presence_sil_mask = presence_sil_mask.detach().cpu().numpy()
         if wandb_run is None:
             plot_rgbd_silhouette(color, depth, im, rastered_depth, presence_sil_mask, diff_depth_rmse,
-                                 psnr, rmse, fig_title, plot_dir, 
-                                 plot_name=plot_name, save_plot=True)
+                                 psnr, rmse, fig_title, plot_dir, plot_name=plot_name, save_plot=True,
+                                 seg=gt_seg, rastered_seg=rastered_seg)
         elif wandb_save_qual:
             plot_rgbd_silhouette(color, depth, im, rastered_depth, presence_sil_mask, diff_depth_rmse,
-                                 psnr, rmse, fig_title, plot_dir, 
-                                 plot_name=plot_name, save_plot=True,
-                                 wandb_run=wandb_run, wandb_step=None, 
+                                 psnr, rmse, fig_title, plot_dir, plot_name=plot_name, save_plot=True,
+                                 seg=gt_seg, rastered_seg=rastered_seg, wandb_run=wandb_run, wandb_step=None, 
                                  wandb_title="Eval Qual Viz")
 
     # Compute Average Metrics

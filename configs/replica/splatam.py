@@ -6,11 +6,9 @@ scenes = ["room0", "room1", "room2",
           "office0", "office2",
           "office3", "office4"]
 
-primary_device="cuda:0" # The GaussianRasterizer uses the default cuda:0.
-                        # If you want to use other device, you have to modify
-                        # rasterize_points.cu and recompile the rasterizer.
+primary_device="cuda:0"
 seed = 0
-scene_name = "office2"
+scene_name = "office4"
 
 map_every = 1
 keyframe_every = 5
@@ -22,7 +20,7 @@ now = datetime.now()
 formatted_time = now.strftime("%Y%m%d_%H%M")
 
 group_name = "Replica"
-run_name = f"{scene_name}_{seed}"
+run_name = f"{scene_name}_{seed}_semantic"
 
 config = dict(
     workdir=f"./experiments/{group_name}",
@@ -95,9 +93,9 @@ config = dict(
         use_sil_for_loss=False,
         ignore_outlier_depth_loss=False,
         loss_weights=dict(
-            im=0.6,
-            depth=1.2,
-            seg=0.3
+            im=0.5,
+            depth=1.0,
+            seg=0.15
         ),
         lrs=dict(
             means3D=0.0001,

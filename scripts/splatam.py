@@ -540,6 +540,9 @@ def rgbd_slam(config: dict):
 
     # Get Device
     device = torch.device(config["primary_device"])
+    if config["primary_device"].startswith("cuda:"):
+        device_id = int(config["primary_device"].split(':')[1])
+        torch.cuda.set_device(device_id)
 
     # Load Dataset
     print("Loading Dataset ...")
