@@ -571,12 +571,14 @@ def eval(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_iters, 
             psnr = calc_psnr(weighted_im, weighted_gt_im).mean()
             ssim = ms_ssim(weighted_im.unsqueeze(0).cpu(), weighted_gt_im.unsqueeze(0).cpu(), 
                            data_range=1.0, size_average=True)
+            loss_fn_alex.to(device)
             lpips_score = loss_fn_alex(torch.clamp(weighted_im.unsqueeze(0), 0.0, 1.0),
                                        torch.clamp(weighted_gt_im.unsqueeze(0), 0.0, 1.0)).item()
         else:
             psnr = calc_psnr(im, curr_data['im']).mean()
             ssim = ms_ssim(im.unsqueeze(0).cpu(), curr_data['im'].unsqueeze(0).cpu(), 
                            data_range=1.0, size_average=True)
+            loss_fn_alex.to(device)
             lpips_score = loss_fn_alex(torch.clamp(im.unsqueeze(0), 0.0, 1.0),
                                        torch.clamp(curr_data['im'].unsqueeze(0), 0.0, 1.0)).item()
 
