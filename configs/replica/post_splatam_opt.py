@@ -1,10 +1,10 @@
 from os.path import join as p_join
 
-primary_device = "cuda:0"
+primary_device = "cuda:3"
 seed = 0
-group_name = "Replica"
-run_name = "Post_SplaTAM_Opt_semantic"
-scene_name = "office2"
+group_name = "Replica_origin_postopt"
+run_name = "Post_SplaTAM_Opt"
+scene_name = "office0"
 
 config = dict(
     workdir=f"./experiments/{group_name}",
@@ -34,8 +34,8 @@ config = dict(
         num_frames=100,
         eval_stride=3,
         eval_num_frames=300,
-        param_ckpt_path=f"./experiments/{group_name}/{scene_name}_{seed}_semantic/params.npz",
-        load_semantics=True,
+        param_ckpt_path=f"./experiments/Replica_origin/{scene_name}_{seed}/params.npz",
+        load_semantics=False,
         num_semantic_classes=49
     ),
     train=dict(
@@ -45,7 +45,7 @@ config = dict(
         loss_weights=dict(
             im=0.5,
             depth=1.0,
-            seg=0.10,
+            seg=0.0, #0.10,
         ),
         lrs_mapping=dict(
             means3D=0.00032,
@@ -61,10 +61,10 @@ config = dict(
         lr_delay_mult=0.01,
         use_gaussian_splatting_densification=True, # Use Gaussian Splatting-based Densification during Mapping
         densify_dict=dict( # Needs to be updated based on the number of mapping iterations
-            start_after=1,#500,
+            start_after=500,
             remove_big_after=3000,
             stop_after=15000,
-            densify_every=2, #100,
+            densify_every=100,
             grad_thresh=0.0002,
             num_to_split_into=2,
             removal_opacity_threshold=0.005,

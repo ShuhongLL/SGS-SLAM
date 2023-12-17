@@ -393,6 +393,9 @@ def rgbd_slam(config: dict):
 
     # Get Device
     device = torch.device(config["primary_device"])
+    if config["primary_device"].startswith("cuda:"):
+        device_id = int(config["primary_device"].split(':')[1])
+        torch.cuda.set_device(device_id)
 
     # Load Dataset
     print("Loading Dataset ...")
@@ -611,12 +614,12 @@ def rgbd_slam(config: dict):
     with torch.no_grad():
         eval_params = convert_params_to_store(params)
         if config['use_wandb']:
-            eval(eval_dataset, eval_params, eval_num_frames, eval_dir, sil_thres=config['train']['sil_thres'],
-                 wandb_run=wandb_run, wandb_save_qual=config['wandb']['eval_save_qual'],
-                 mapping_iters=config["train"]["num_iters_mapping"], add_new_gaussians=True)
+            eval(eval_dataset, eval_params, eval_num_frames, eval_dir, sil_thres=config['train']['sil_thres'], wandb_run=wandb_run,
+                 wandb_save_qual=config['wandb']['eval_save_qual'], mapping_iters=config["train"]["num_iters_mapping"],
+                 add_new_gaussians=True, load_semantics=load_semantics)
         else:
             eval(eval_dataset, eval_params, eval_num_frames, eval_dir, sil_thres=config['train']['sil_thres'],
-                 mapping_iters=config["train"]["num_iters_mapping"], add_new_gaussians=True)
+                 mapping_iters=config["train"]["num_iters_mapping"], add_new_gaussians=True, load_semantics=load_semantics)
 
     # Add Camera Parameters to Save them
     params = eval_params

@@ -6,9 +6,9 @@ scenes = ["room0", "room1", "room2",
           "office0", "office2",
           "office3", "office4"]
 
-primary_device="cuda:0"
+primary_device="cuda:2"
 seed = 0
-scene_name = "office4"
+scene_name = "room0"
 
 map_every = 1
 keyframe_every = 5
@@ -95,7 +95,7 @@ config = dict(
         loss_weights=dict(
             im=0.5,
             depth=1.0,
-            seg=0.15
+            seg=0.1
         ),
         lrs=dict(
             means3D=0.0001,

@@ -6,9 +6,9 @@ scenes = ["room0", "room1", "room2",
           "office0", "office2",
           "office3", "office4"]
 
-primary_device="cuda:1"
+primary_device="cuda:3"
 seed = 0
-scene_name = "office4"
+scene_name = "room2"
 
 map_every = 1
 keyframe_every = 5
