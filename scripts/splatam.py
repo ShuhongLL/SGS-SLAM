@@ -781,7 +781,7 @@ def rgbd_slam(config: dict):
                                                    tracking_iteration=iter, load_semantics=load_semantics)
                 if config['use_wandb']:
                     # Report Loss
-                    wandb_tracking_step = report_loss(losses, wandb_run, wandb_tracking_step, tracking=True)
+                    wandb_tracking_step = report_loss(losses, wandb_run, wandb_tracking_step, tracking=True, load_semantics=load_semantics)
                 # Backprop
                 loss.backward()
                 # Optimizer Update
@@ -949,7 +949,7 @@ def rgbd_slam(config: dict):
                                                 mapping=True, device=device, load_semantics=load_semantics)
                 if config['use_wandb']:
                     # Report Loss
-                    wandb_mapping_step = report_loss(losses, wandb_run, wandb_mapping_step, mapping=True)
+                    wandb_mapping_step = report_loss(losses, wandb_run, wandb_mapping_step, mapping=True, load_semantics=load_semantics)
                 # Backprop
                 loss.backward()
                 with torch.no_grad():
@@ -960,9 +960,9 @@ def rgbd_slam(config: dict):
                             wandb_run.log({"Mapping/Number of Gaussians - Pruning": params['means3D'].shape[0],
                                            "Mapping/step": wandb_mapping_step})
                     # Gaussian-Splatting's Gradient-based Densification
-                    # TODO :: ->
+                    # TODO :: add semantics similar like post_splatam
                     if config['mapping']['use_gaussian_splatting_densification']:
-                        params, variables = densify(params, variables, optimizer, iter, config['mapping']['densify_dict'])
+                        params, variables = densify(params, variables, optimizer, iter, config['mapping']['densify_dict'], params_opt_exclude, device=device)
                         if config['use_wandb']:
                             wandb_run.log({"Mapping/Number of Gaussians - Densification": params['means3D'].shape[0],
                                            "Mapping/step": wandb_mapping_step})

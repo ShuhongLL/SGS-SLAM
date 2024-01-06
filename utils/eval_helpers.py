@@ -56,6 +56,48 @@ def align(model, data):
     return rot, trans, trans_error
 
 
+def recolor_semantic_img(rendered_seg, gt_seg, color_map=None):
+    """Adjust the semantic color by assigning to the closest color refer to
+       the ground truth semantic image or color dict.
+    """
+    rendered_seg = rendered_seg.permute(1, 2, 0) # (3, H, W) -> (H, W, 3)
+    gt_seg = gt_seg.permute(1, 2, 0)
+    img_shape = gt_seg.shape
+    rendered_seg = rendered_seg.reshape(-1, 1, 3).type(torch.float32) # (H*W, 1, 3)
+
+    if color_map is None:
+        gt_seg = gt_seg.reshape(-1, 3)
+        # Find unique colors
+        color_map, _ = torch.unique(gt_seg, dim=0, return_inverse=True)
+    refer_color = color_map.reshape(1, -1, 3).type(torch.float32).to(gt_seg.device) # (1, H*W, 3)
+
+    # l1_distances = torch.sum(torch.abs(rendered_seg - refer_color), axis=2)
+    l1_distances = torch.sqrt(torch.sum((rendered_seg - refer_color) ** 2, axis=2))
+    # Find the index of the minimum distance for each pixel
+    closest_indices = torch.argmin(l1_distances, axis=1)
+    del l1_distances
+
+    # Assign the closest color to the rendered semantic image
+    rendered_seg[:, 0, :] = refer_color.squeeze(0)[closest_indices]
+    rendered_seg = rendered_seg.reshape(img_shape) # (H*W, 1, 3) -> (H, W, 3)
+    rendered_seg = rendered_seg.permute(2, 0, 1) # (H, W, 3) -> (3, H, W)
+    
+    return rendered_seg
+
+
+def evaluate_miou(recolored_img, gt_img):
+    intersection = torch.sum(recolored_img == gt_img)    
+    # Calculate union: pixels that are not background in either image
+    # Background is represented by 0
+    union = torch.sum(torch.logical_or(recolored_img != 0, gt_img != 0))
+
+    if union == 0:
+        return 0
+    
+    miou = intersection / union
+    return miou
+
+
 def evaluate_ate(gt_traj, est_traj):
     """
     Input : 
@@ -76,11 +118,14 @@ def evaluate_ate(gt_traj, est_traj):
     return avg_trans_error
 
 
-def report_loss(losses, wandb_run, wandb_step, tracking=False, mapping=False):
+def report_loss(losses, wandb_run, wandb_step, tracking=False, mapping=False, load_semantics=False):
     # Update loss dict
     loss_dict = {'Loss': losses['loss'].item(),
                  'Image Loss': losses['im'].item(),
                  'Depth Loss': losses['depth'].item(),}
+    if load_semantics:
+        loss_dict['Semantic Loss'] = losses['seg'].item()
+    
     if tracking:
         tracking_loss_dict = {}
         for k, v in loss_dict.items():
@@ -139,10 +184,12 @@ def plot_rgbd_silhouette(color, depth, rastered_color, rastered_depth, presence_
     axs[1, 2].set_title("Diff Depth L1")
     
     if seg is not None:
+        rastered_seg = recolor_semantic_img(rastered_seg, seg)
+        miou = evaluate_miou(rastered_seg, seg)
         axs[0, 3].imshow(seg.cpu().permute(1, 2, 0))
         axs[0, 3].set_title("Ground Truth Semantic Map")
         axs[1, 3].imshow(rastered_seg.cpu().permute(1, 2, 0))
-        axs[1, 3].set_title("Rasterized Semantic Map, IOU: xx")
+        axs[1, 3].set_title("Rasterized Semantic Map, IOU: {:.4f}".format(miou))
         
     for ax in axs.flatten():
         ax.axis('off')
@@ -240,10 +287,12 @@ def report_progress(params, data, i, progress_bar, iter_time_idx, sil_thres, eve
             rastered_seg, _, _, = Renderer(raster_settings=data['cam'])(**semantic_rendervar)
             gt_seg = data['semantic_color']
             # seg_psnr = calc_psnr(seg, data['semantic_color']).mean()
-            # TODO :: calculate IOU
+            rastered_seg = recolor_semantic_img(rastered_seg, gt_seg)
+            miou = evaluate_miou(rastered_seg, gt_seg)
         else:
             rastered_seg = None
             gt_seg = None
+            miou = 0
 
         if tracking:
             psnr = calc_psnr(im * presence_sil_mask, data['im'] * presence_sil_mask).mean()
@@ -266,19 +315,20 @@ def report_progress(params, data, i, progress_bar, iter_time_idx, sil_thres, eve
             depth_l1 = diff_depth_l1.sum() / valid_depth_mask.sum()
 
         if not (tracking or mapping):
-            progress_bar.set_postfix({f"Time-Step: {iter_time_idx} | PSNR: {psnr:.{7}} | Depth RMSE: {rmse:.{7}} | L1": f"{depth_l1:.{7}}"})
+            progress_bar.set_postfix({f"Time-Step: {iter_time_idx} | PSNR: {psnr:.{7}} | Depth RMSE: {rmse:.{7}} | mIoU: {miou:.{7}} | L1": f"{depth_l1:.{7}}"})
             progress_bar.update(every_i)
         elif tracking:
             progress_bar.set_postfix({f"Time-Step: {iter_time_idx} | Rel Pose Error: {rel_pt_error.item():.{7}} | Pose Error: {iter_pt_error.item():.{7}} | ATE RMSE": f"{ate_rmse.item():.{7}}"})
             progress_bar.update(every_i)
         elif mapping:
-            progress_bar.set_postfix({f"Time-Step: {online_time_idx} | Frame {data['id']} | PSNR: {psnr:.{7}} | Depth RMSE: {rmse:.{7}} | L1": f"{depth_l1:.{7}}"})
+            progress_bar.set_postfix({f"Time-Step: {online_time_idx} | Frame {data['id']} | PSNR: {psnr:.{7}} | Depth RMSE: {rmse:.{7}} | mIoU: {miou:.{7}} | L1": f"{depth_l1:.{7}}"})
             progress_bar.update(every_i)
         
         if wandb_run is not None:
             wandb_log = {f"{stage}/PSNR": psnr,
                          f"{stage}/Depth RMSE": rmse,
                          f"{stage}/Depth L1": depth_l1,
+                         f"{stage}/mIoU": miou,
                          f"{stage}/step": wandb_step}
             if tracking:
                 wandb_log = {**wandb_log, **tracking_log}
@@ -297,7 +347,7 @@ def report_progress(params, data, i, progress_bar, iter_time_idx, sil_thres, eve
                                  psnr, depth_l1, fig_title, seg=gt_seg, rastered_seg=rastered_seg, wandb_run=wandb_run,
                                  wandb_step=wandb_step, wandb_title=f"{stage} Qual Viz")
 
-
+# TODO:: add semantics
 def eval_online(dataset, all_params, num_frames, eval_online_dir, sil_thres, mapping_iters,
                 add_new_gaussians, device="cuda", wandb_run=None, wandb_save_qual=False, eval_every=1):
     print("Evaluating Online Final Parameters...")
@@ -436,6 +486,7 @@ def eval(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_iters,
     l1_list = []
     lpips_list = []
     ssim_list = []
+    miou_list = []
     plot_dir = os.path.join(eval_dir, "plots")
     os.makedirs(plot_dir, exist_ok=True)
     if save_frames:
@@ -509,8 +560,8 @@ def eval(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_iters,
             weighted_im = im * valid_depth_mask
             weighted_gt_im = curr_data['im'] * valid_depth_mask
         psnr = calc_psnr(weighted_im, weighted_gt_im).mean()
-        ssim = ms_ssim(weighted_im.unsqueeze(0).cpu(), weighted_gt_im.unsqueeze(0).cpu(), 
-                        data_range=1.0, size_average=True)
+        ssim = ms_ssim(weighted_im.unsqueeze(0).cpu(), weighted_gt_im.unsqueeze(0).cpu(),
+                       data_range=1.0, size_average=True)
         loss_fn_alex.to(device)
         lpips_score = loss_fn_alex(torch.clamp(weighted_im.unsqueeze(0), 0.0, 1.0),
                                     torch.clamp(weighted_gt_im.unsqueeze(0), 0.0, 1.0)).item()
@@ -537,7 +588,6 @@ def eval(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_iters,
         rmse_list.append(rmse.cpu().numpy())
         l1_list.append(depth_l1.cpu().numpy())
 
-        # TODO :: add semantic loss
         if load_semantics:
             curr_data['semantic_id'] = semantic_id
             curr_data['semantic_color'] = semantic_color
@@ -545,6 +595,11 @@ def eval(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_iters,
             semantic_rendervar = transformed_semantics2rendervar(final_params, transformed_pts, device=device)
             rastered_seg, _, _, = Renderer(raster_settings=curr_data['cam'])(**semantic_rendervar)
             gt_seg = semantic_color
+
+            # Calcualte mIoU scores
+            rastered_seg = recolor_semantic_img(rastered_seg, gt_seg)
+            miou = evaluate_miou(rastered_seg, gt_seg)
+            miou_list.append(miou.cpu().numpy())
         else:
             rastered_seg = None
             gt_seg = None
@@ -622,24 +677,28 @@ def eval(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_iters,
     l1_list = np.array(l1_list)
     ssim_list = np.array(ssim_list)
     lpips_list = np.array(lpips_list)
+    miou_list = np.array(miou_list)
     avg_psnr = psnr_list.mean()
     avg_rmse = rmse_list.mean()
     avg_l1 = l1_list.mean()
     avg_ssim = ssim_list.mean()
     avg_lpips = lpips_list.mean()
+    avg_miou = 0 if miou_list.size == 0 else miou_list.mean()
     print("Average PSNR: {:.2f}".format(avg_psnr))
     print("Average Depth RMSE: {:.2f} cm".format(avg_rmse*100))
     print("Average Depth L1: {:.2f} cm".format(avg_l1*100))
     print("Average MS-SSIM: {:.3f}".format(avg_ssim))
     print("Average LPIPS: {:.3f}".format(avg_lpips))
+    print("Average mIoU: {:.4f}".format(avg_miou))
 
     if wandb_run is not None:
-        wandb_run.log({"Final Stats/Average PSNR": avg_psnr, 
-                       "Final Stats/Average Depth RMSE": avg_rmse,
-                       "Final Stats/Average Depth L1": avg_l1,
-                       "Final Stats/Average MS-SSIM": avg_ssim, 
-                       "Final Stats/Average LPIPS": avg_lpips,
-                       "Final Stats/step": 1})
+        wandb_run.log({"Final Stats/Average PSNR": avg_psnr,
+                        "Final Stats/Average Depth RMSE": avg_rmse,
+                        "Final Stats/Average Depth L1": avg_l1,
+                        "Final Stats/Average MS-SSIM": avg_ssim,
+                        "Final Stats/Average LPIPS": avg_lpips,
+                        "Final Stats/step": 1,
+                        "Final Stats/Average mIoU": avg_miou})
 
     # Save metric lists as text files
     np.savetxt(os.path.join(eval_dir, "psnr.txt"), psnr_list)
@@ -648,24 +707,36 @@ def eval(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_iters,
     np.savetxt(os.path.join(eval_dir, "ssim.txt"), ssim_list)
     np.savetxt(os.path.join(eval_dir, "lpips.txt"), lpips_list)
 
-    # Plot PSNR & L1 as line plots
-    fig, axs = plt.subplots(1, 2, figsize=(12, 4))
+    # Check if load_semantics is set to True
+    if load_semantics:
+        np.savetxt(os.path.join(eval_dir, "miou.txt"), miou_list)
+        fig, axs = plt.subplots(1, 3, figsize=(18, 4))
+        axs[2].plot(np.arange(len(miou_list)), miou_list)
+        axs[2].set_title("mIoU")
+        axs[2].set_xlabel("Time Step")
+        axs[2].set_ylabel("mIoU")
+    else:
+        fig, axs = plt.subplots(1, 2, figsize=(12, 4))
+
     axs[0].plot(np.arange(len(psnr_list)), psnr_list)
     axs[0].set_title("RGB PSNR")
     axs[0].set_xlabel("Time Step")
     axs[0].set_ylabel("PSNR")
+
     axs[1].plot(np.arange(len(l1_list)), l1_list*100)
     axs[1].set_title("Depth L1")
     axs[1].set_xlabel("Time Step")
     axs[1].set_ylabel("L1 (cm)")
-    fig.suptitle("Average PSNR: {:.2f}, Average Depth L1: {:.2f} cm, ATE RMSE: {:.2f} cm".format(
-        avg_psnr, avg_l1*100, ate_rmse*100), y=1.05, fontsize=16)
+
+    fig.suptitle("Average PSNR: {:.2f}, Average Depth L1: {:.2f} cm, ATE RMSE: {:.2f} cm, Average mIoU: {:.4f}".format(
+        avg_psnr, avg_l1*100, ate_rmse*100, avg_miou), y=1.05, fontsize=16)
+
     plt.savefig(os.path.join(eval_dir, "metrics.png"), bbox_inches='tight')
     if wandb_run is not None:
         wandb_run.log({"Eval/Metrics": fig})
     plt.close()
 
-
+# TODO:: add semantics
 def eval_nvs(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_iters,
              add_new_gaussians, device="cuda", wandb_run=None, wandb_save_qual=False,
              eval_every=1, save_frames=False):

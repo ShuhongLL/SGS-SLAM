@@ -106,8 +106,11 @@ def accumulate_mean2d_gradient(variables):
     return variables
 
 
-def update_params_and_optimizer(new_params, params, optimizer):
+def update_params_and_optimizer(new_params, params, params_opt_exclude, optimizer):
     for k, v in new_params.items():
+        if k in params_opt_exclude:
+            params[k] = new_params[k]
+            continue
         group = [x for x in optimizer.param_groups if x["name"] == k][0]
         stored_state = optimizer.state.get(group['params'][0], None)
 
@@ -121,8 +124,11 @@ def update_params_and_optimizer(new_params, params, optimizer):
     return params
 
 
-def cat_params_to_optimizer(new_params, params, optimizer):
+def cat_params_to_optimizer(new_params, params, params_opt_exclude, optimizer):
     for k, v in new_params.items():
+        if k in params_opt_exclude:
+            params[k] = torch.cat((params[k], v), dim=0)
+            continue
         group = [g for g in optimizer.param_groups if g['name'] == k][0]
         stored_state = optimizer.state.get(group['params'][0], None)
         if stored_state is not None:
@@ -194,7 +200,7 @@ def prune_gaussians(params, params_opt_exclude, variables, optimizer, iter, prun
     return params, variables
 
 
-def densify(params, variables, optimizer, iter, densify_dict, device="cuda"):
+def densify(params, variables, optimizer, iter, densify_dict, params_opt_exclude, device="cuda"):
     if iter <= densify_dict['stop_after']:
         variables = accumulate_mean2d_gradient(variables)
         grad_thresh = densify_dict['grad_thresh']
@@ -204,7 +210,7 @@ def densify(params, variables, optimizer, iter, densify_dict, device="cuda"):
             to_clone = torch.logical_and(grads >= grad_thresh, (
                         torch.max(torch.exp(params['log_scales']), dim=1).values <= 0.01 * variables['scene_radius']))
             new_params = {k: v[to_clone] for k, v in params.items() if k not in ['cam_unnorm_rots', 'cam_trans']}
-            params = cat_params_to_optimizer(new_params, params, optimizer)
+            params = cat_params_to_optimizer(new_params, params, params_opt_exclude, optimizer)
             num_pts = params['means3D'].shape[0]
 
             padded_grad = torch.zeros(num_pts, device=device)
@@ -220,14 +226,14 @@ def densify(params, variables, optimizer, iter, densify_dict, device="cuda"):
             rots = build_rotation(params['unnorm_rotations'][to_split], device=device).repeat(n, 1, 1)
             new_params['means3D'] += torch.bmm(rots, samples.unsqueeze(-1)).squeeze(-1)
             new_params['log_scales'] = torch.log(torch.exp(new_params['log_scales']) / (0.8 * n))
-            params = cat_params_to_optimizer(new_params, params, optimizer)
+            params = cat_params_to_optimizer(new_params, params, params_opt_exclude, optimizer)
             num_pts = params['means3D'].shape[0]
 
             variables['means2D_gradient_accum'] = torch.zeros(num_pts, device=device)
             variables['denom'] = torch.zeros(num_pts, device=device)
             variables['max_2D_radius'] = torch.zeros(num_pts, device=device)
             to_remove = torch.cat((to_split, torch.zeros(n * to_split.sum(), dtype=torch.bool, device=device)))
-            params, variables = remove_points(to_remove, params, variables, optimizer)
+            params, variables = remove_points(to_remove, params, params_opt_exclude, variables, optimizer)
 
             if iter == densify_dict['stop_after']:
                 remove_threshold = densify_dict['final_removal_opacity_threshold']
@@ -237,14 +243,14 @@ def densify(params, variables, optimizer, iter, densify_dict, device="cuda"):
             if iter >= densify_dict['remove_big_after']:
                 big_points_ws = torch.exp(params['log_scales']).max(dim=1).values > 0.1 * variables['scene_radius']
                 to_remove = torch.logical_or(to_remove, big_points_ws)
-            params, variables = remove_points(to_remove, params, variables, optimizer)
+            params, variables = remove_points(to_remove, params, params_opt_exclude, variables, optimizer)
 
             torch.cuda.empty_cache()
 
         # Reset Opacities for all Gaussians (This is not desired for mapping on only current frame)
         if iter > 0 and iter % densify_dict['reset_opacities_every'] == 0 and densify_dict['reset_opacities']:
             new_params = {'logit_opacities': inverse_sigmoid(torch.ones_like(params['logit_opacities']) * 0.01)}
-            params = update_params_and_optimizer(new_params, params, optimizer)
+            params = update_params_and_optimizer(new_params, params, params_opt_exclude, optimizer)
 
     return params, variables
 

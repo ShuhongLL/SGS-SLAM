@@ -1,4 +1,5 @@
 import argparse
+import copy
 import os
 import sys
 from importlib.machinery import SourceFileLoader
@@ -37,10 +38,15 @@ def load_camera(cfg, scene_path):
     return w2c, k
 
 
-def load_scene_data(scene_path, first_frame_w2c, intrinsics):
+def load_scene_data(scene_path, first_frame_w2c, intrinsics, load_semantics=False):
     # Load Scene Data
     all_params = dict(np.load(scene_path, allow_pickle=True))
-    all_params = {k: torch.tensor(all_params[k]).cuda().float() for k in all_params.keys()}
+    for k in all_params.keys():
+        if k == 'semantic_id':
+            all_params[k] = torch.tensor(all_params[k]).cuda().int() # semantic_id has dtype int
+        else:
+            all_params[k] = torch.tensor(all_params[k]).cuda().float()
+
     intrinsics = torch.tensor(intrinsics).cuda().float()
     first_frame_w2c = torch.tensor(first_frame_w2c).cuda().float()
 
@@ -84,7 +90,23 @@ def load_scene_data(scene_path, first_frame_w2c, intrinsics):
         'scales': torch.exp(torch.tile(params['log_scales'], (1, 3))),
         'means2D': torch.zeros_like(params['means3D'], device="cuda")
     }
-    return rendervar, depth_rendervar, all_w2cs
+
+    if load_semantics:
+        semantic_rendervar = {
+            'means3D': transformed_pts,
+            'colors_precomp': params['semantic_colors'],
+            'rotations': torch.nn.functional.normalize(params['unnorm_rotations']),
+            'opacities': torch.sigmoid(params['logit_opacities']),
+            'scales': torch.exp(torch.tile(params['log_scales'], (1, 3))),
+            'means2D': torch.zeros_like(params['means3D'], device="cuda")
+        }
+        semantic_ids = params['semantic_ids'].cuda()
+        if semantic_ids.dim() == 1:
+            semantic_ids = semantic_ids.unsqueeze(1)
+    else:
+        semantic_rendervar, semantic_ids = None, None
+
+    return rendervar, depth_rendervar, semantic_rendervar, all_w2cs, semantic_ids
 
 
 def make_lineset(all_pts, all_cols, num_lines):
@@ -100,8 +122,16 @@ def make_lineset(all_pts, all_cols, num_lines):
     return linesets
 
 
-def render(w2c, k, timestep_data, timestep_depth_data, cfg, device="cuda"):
+def render(w2c, k, timestep_data, timestep_depth_data, cfg, render_mask, device="cuda"):
     with torch.no_grad():
+        mask_timestep_data = copy.deepcopy(timestep_data)
+        for key, value in mask_timestep_data.items():
+            mask_timestep_data[key] = value[render_mask]
+
+        mask_timestep_depth_data = copy.deepcopy(timestep_depth_data)
+        for key, value in mask_timestep_depth_data.items():
+            mask_timestep_depth_data[key] = value[render_mask]
+
         cam = setup_camera(cfg['viz_w'], cfg['viz_h'], k, w2c, cfg['viz_near'],
                            cfg['viz_far'], device=device)
         white_bg_cam = Camera(
@@ -117,8 +147,9 @@ def render(w2c, k, timestep_data, timestep_depth_data, cfg, device="cuda"):
             campos=cam.campos,
             prefiltered=cam.prefiltered
         )
-        im, _, depth, = Renderer(raster_settings=white_bg_cam)(**timestep_data)
-        depth_sil, _, _, = Renderer(raster_settings=cam)(**timestep_depth_data)
+        
+        im, _, depth, = Renderer(raster_settings=white_bg_cam)(**mask_timestep_data)
+        depth_sil, _, _, = Renderer(raster_settings=cam)(**mask_timestep_depth_data)
         differentiable_depth = depth_sil[0, :, :].unsqueeze(0)
         sil = depth_sil[1, :, :].unsqueeze(0)
         return im, depth, sil
@@ -170,7 +201,16 @@ def visualize(scene_path, cfg):
     # Load Scene Data
     w2c, k = load_camera(cfg, scene_path)
 
-    scene_data, scene_depth_data, all_w2cs = load_scene_data(scene_path, w2c, k)
+    if 'load_semantics' in cfg:
+        load_semantics = cfg['load_semantics']
+    else:
+        load_semantics = False
+
+    scene_data, scene_depth_data, scene_semantic_data, all_w2cs, semantic_ids = load_scene_data(
+        scene_path, w2c, k, load_semantics=load_semantics)
+    
+    # Points to keep
+    render_mask = torch.ones(scene_data['means3D'].shape[0], dtype=torch.bool).cuda()
 
     # vis.create_window()
     vis = o3d.visualization.Visualizer()
@@ -178,7 +218,7 @@ def visualize(scene_path, cfg):
                       height=int(cfg['viz_h'] * cfg['view_scale']),
                       visible=True)
 
-    im, depth, sil = render(w2c, k, scene_data, scene_depth_data, cfg)
+    im, depth, sil = render(w2c, k, scene_data, scene_depth_data, cfg, render_mask)
     init_pts, init_cols = rgbd2pcd(im, depth, w2c, k, cfg)
     pcd = o3d.geometry.PointCloud()
     pcd.points = init_pts
@@ -239,6 +279,12 @@ def visualize(scene_path, cfg):
     render_options.point_size = cfg['view_scale']
     render_options.light_on = False
 
+    if load_semantics:
+        semantic_exclude = [32] #[38]
+        semantic_exclude = torch.tensor(semantic_exclude).cuda()
+        for to_remove_id in semantic_exclude:
+            render_mask &= (semantic_ids.squeeze() != to_remove_id)
+
     # Interactive Rendering
     while True:
         cam_params = view_control.convert_to_pinhole_camera_parameters()
@@ -248,10 +294,13 @@ def visualize(scene_path, cfg):
         w2c = cam_params.extrinsic
 
         if cfg['render_mode'] == 'centers':
-            pts = o3d.utility.Vector3dVector(scene_data['means3D'].contiguous().double().cpu().numpy())
-            cols = o3d.utility.Vector3dVector(scene_data['colors_precomp'].contiguous().double().cpu().numpy())
+            pts = o3d.utility.Vector3dVector(scene_data['means3D'][render_mask].contiguous().double().cpu().numpy())
+            cols = o3d.utility.Vector3dVector(scene_data['colors_precomp'][render_mask].contiguous().double().cpu().numpy())
+        elif cfg['render_mode'] == 'semantic_color':
+            seg, depth, sil = render(w2c, k, scene_semantic_data, scene_depth_data, cfg, render_mask)
+            pts, cols = rgbd2pcd(seg, depth, w2c, k, cfg)
         else:
-            im, depth, sil = render(w2c, k, scene_data, scene_depth_data, cfg)
+            im, depth, sil = render(w2c, k, scene_data, scene_depth_data, cfg, render_mask)
             if cfg['show_sil']:
                 im = (1-sil).repeat(3, 1, 1)
             pts, cols = rgbd2pcd(im, depth, w2c, k, cfg)

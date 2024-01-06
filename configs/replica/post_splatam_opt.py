@@ -4,7 +4,7 @@ primary_device = "cuda:3"
 seed = 0
 group_name = "Replica_origin_postopt"
 run_name = "Post_SplaTAM_Opt"
-scene_name = "office0"
+scene_name = "room1"
 
 config = dict(
     workdir=f"./experiments/{group_name}",
@@ -83,5 +83,8 @@ config = dict(
         view_scale=2,
         viz_fps=5, # FPS for Online Recon Viz
         enter_interactive_post_online=True, # Enter Interactive Mode after Online Recon Viz
+        scene_name = scene_name,
+        color_dict_path="./data/Replica/color_dict.json",
+        load_semantics=True, # Whether load semantic information
     ),
 )
