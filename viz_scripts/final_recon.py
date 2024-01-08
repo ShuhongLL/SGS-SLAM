@@ -264,11 +264,17 @@ def visualize(scene_path, cfg):
     view_k[2, 2] = 1
     view_control = vis.get_view_control()
     cparams = o3d.camera.PinholeCameraParameters()
-    if cfg['offset_first_viz_cam']:
-        view_w2c = w2c
-        view_w2c[:3, 3] = view_w2c[:3, 3] + np.array([0, 0, 0.5])
-    else:
-        view_w2c = w2c
+    # if cfg['offset_first_viz_cam']:
+    #     view_w2c = w2c
+    #     view_w2c[:3, 3] = view_w2c[:3, 3] + np.array([0, 0, 0.5])
+    # else:
+    #     view_w2c = w2c
+    view_w2c = np.array([
+        [ 1,  0,  0,  0],
+        [ 0,  0, -1,  0],
+        [ 0, -1,  0,  10],
+        [ 0,  0,  0,  1]
+    ])
     cparams.extrinsic = view_w2c
     cparams.intrinsic.intrinsic_matrix = view_k
     cparams.intrinsic.height = int(cfg['viz_h'] * cfg['view_scale'])
@@ -292,6 +298,7 @@ def visualize(scene_path, cfg):
         k = view_k / cfg['view_scale']
         k[2, 2] = 1
         w2c = cam_params.extrinsic
+        print(w2c)
 
         if cfg['render_mode'] == 'centers':
             pts = o3d.utility.Vector3dVector(scene_data['means3D'][render_mask].contiguous().double().cpu().numpy())

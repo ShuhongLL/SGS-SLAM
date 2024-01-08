@@ -7,7 +7,8 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 
 from utils.recon_helpers import setup_camera
-from utils.slam_external import build_rotation,calc_psnr
+from utils.slam_external import build_rotation, calc_psnr
+from utils.eval_helpers import recolor_semantic_img, evaluate_miou
 
 from diff_gaussian_rasterization import GaussianRasterizer as Renderer
 
@@ -391,9 +392,9 @@ def plot_rgbd_silhouette(color, depth, rastered_color, rastered_depth, presence_
     aspect_ratio = color.shape[2] / color.shape[1]
     fig_height = 8
     fig_width = 14/1.55
-    fig_width = fig_width * aspect_ratio
     # Adjust number of subplots and figure size based on 'seg' variable
     num_cols = 4 if seg is not None else 3
+    fig_width = fig_width * aspect_ratio * num_cols / 3
     # Plot the Ground Truth and Rasterized RGB & Depth, along with Diff Depth & Silhouette
     fig, axs = plt.subplots(2, num_cols, figsize=(fig_width, fig_height))
     axs[0, 0].imshow(color.cpu().permute(1, 2, 0))
@@ -412,10 +413,12 @@ def plot_rgbd_silhouette(color, depth, rastered_color, rastered_depth, presence_
     axs[1, 2].set_title("Diff Depth RMSE")
 
     if seg is not None:
+        rastered_seg = recolor_semantic_img(rastered_seg, seg)
+        miou = evaluate_miou(rastered_seg, seg)
         axs[0, 3].imshow(seg.cpu().permute(1, 2, 0))
         axs[0, 3].set_title("Ground Truth Semantic Map")
         axs[1, 3].imshow(rastered_seg.cpu().permute(1, 2, 0))
-        axs[1, 3].set_title("Rasterized Semantic Map, IOU: xx")
+        axs[1, 3].set_title("Rasterized Semantic Map, IOU: {:.4f}".format(miou))
 
     for ax in axs.flatten():
         ax.axis('off')
@@ -461,9 +464,12 @@ def report_progress(params, data, i, progress_bar, iter_time_idx, sil_thres, eve
             semantic_rendervar = semantics2rendervar(params)
             rastered_seg, _, _, = Renderer(raster_settings=data['cam'])(**semantic_rendervar)
             gt_seg = data['semantic_color']
+            rastered_seg = recolor_semantic_img(rastered_seg, gt_seg)
+            miou = evaluate_miou(rastered_seg, gt_seg)
         else:
             rastered_seg = None
             gt_seg = None
+            miou = 0
 
         if tracking:
             psnr = calc_psnr(im * presence_sil_mask, data['im'] * presence_sil_mask).mean()
@@ -483,11 +489,11 @@ def report_progress(params, data, i, progress_bar, iter_time_idx, sil_thres, eve
             progress_bar.set_postfix({f"Time-Step: {iter_time_idx} | Frame {data['id']} | PSNR: {psnr:.{7}} | RMSE": f"{rmse:.{7}}"})
             progress_bar.update(every_i)
         else:
-            progress_bar.set_postfix({f"Time-Step: {online_time_idx} | Frame {data['id']} | PSNR: {psnr:.{7}} | RMSE": f"{rmse:.{7}}"})
+            progress_bar.set_postfix({f"Time-Step: {online_time_idx} | Frame {data['id']} | PSNR: {psnr:.{7}} | RMSE": f"{rmse:.{7}} | mIoU: {miou:.{7}}"})
             progress_bar.update(every_i)
         
         if wandb_run is not None:
-            wandb_run.log({f"{stage} PSNR": psnr, f"{stage} RMSE": rmse}, step=wandb_step)
+            wandb_run.log({f"{stage} PSNR": psnr, f"{stage} RMSE": rmse, f"{stage} mIoU": miou}, step=wandb_step)
         
         if wandb_save_qual and (i % qual_every_i == 0 or i == 1):
             # Silhouette Mask
@@ -510,6 +516,7 @@ def eval(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_iters, 
     rmse_list = []
     lpips_list = []
     ssim_list = []
+    miou_list = []
     plot_dir = os.path.join(eval_dir, "plots")
     os.makedirs(plot_dir, exist_ok=True)
 
@@ -547,6 +554,11 @@ def eval(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_iters, 
             semantic_rendervar = semantics2rendervar(final_params)
             rastered_seg, _, _, = Renderer(raster_settings=curr_data['cam'])(**semantic_rendervar)
             gt_seg = semantic_color
+
+            # Calcualte mIoU scores
+            rastered_seg = recolor_semantic_img(rastered_seg, gt_seg)
+            miou = evaluate_miou(rastered_seg, gt_seg)
+            miou_list.append(miou.cpu().numpy())
         else:
             rastered_seg = None
             gt_seg = None
@@ -616,17 +628,24 @@ def eval(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_iters, 
     rmse_list = np.array(rmse_list)
     ssim_list = np.array(ssim_list)
     lpips_list = np.array(lpips_list)
+    miou_list = np.array(miou_list)
     avg_psnr = psnr_list.mean()
     avg_rmse = rmse_list.mean()
     avg_ssim = ssim_list.mean()
     avg_lpips = lpips_list.mean()
+    avg_miou = 0 if miou_list.size == 0 else miou_list.mean()
     print("Average PSNR: {:.2f}".format(avg_psnr))
     print("Average Depth RMSE: {:.2f}".format(avg_rmse))
     print("Average MS-SSIM: {:.2f}".format(avg_ssim))
     print("Average LPIPS: {:.2f}".format(avg_lpips))
+    print("Average mIoU: {:.4f}".format(avg_miou))
 
     if wandb_run is not None:
-        wandb_run.log({"Average PSNR": avg_psnr, "Average Depth RMSE": avg_rmse, "Average MS-SSIM": avg_ssim, "Average LPIPS": avg_lpips})
+        wandb_run.log({"Average PSNR": avg_psnr,
+                       "Average Depth RMSE": avg_rmse,
+                       "Average MS-SSIM": avg_ssim,
+                       "Average LPIPS": avg_lpips,
+                       "Final Stats/Average mIoU": avg_miou})
 
     # # Save metric lists as text files
     # np.savetxt(os.path.join(eval_dir, "psnr.txt"), psnr_list)
