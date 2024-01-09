@@ -3,7 +3,7 @@ from os.path import join as p_join
 primary_device = "cuda:0"
 seed = 0
 group_name = "Replica_postopt"
-scene_name = "room2"
+scene_name = "office3"
 param_name = f"{scene_name}_{seed}_semantic_wx2"
 run_name = f"postopt_{param_name}"
 param_ckpt_path = f"./experiments/Replica/{param_name}/params.npz"

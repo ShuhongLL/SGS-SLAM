@@ -373,7 +373,7 @@ class GradSLAMDataset(torch.utils.data.Dataset):
             semantic_id = torch.from_numpy(semantic_id)
 
             semantic_color_path = self.semantic_color_paths[index]
-            semantic_color = np.asarray(imageio.imread(semantic_color_path), dtype=np.int8)
+            semantic_color = np.asarray(imageio.imread(semantic_color_path), dtype=float)
             semantic_color = self._preprocess_semantic_color(semantic_color)
             semantic_color = torch.from_numpy(semantic_color)
 

@@ -86,14 +86,13 @@ def recolor_semantic_img(rendered_seg, gt_seg, color_map=None):
 
 
 def evaluate_miou(recolored_img, gt_img):
-    intersection = torch.sum(recolored_img == gt_img)    
-    # Calculate union: pixels that are not background in either image
     # Background is represented by 0
-    union = torch.sum(torch.logical_or(recolored_img != 0, gt_img != 0))
+    non_zero = torch.logical_and(gt_img != 0, recolored_img != 0)
+    intersection = torch.sum(torch.logical_and(non_zero, recolored_img == gt_img))
+    union = torch.sum(non_zero)
 
     if union == 0:
         return 0
-    
     miou = intersection / union
     return miou
 
