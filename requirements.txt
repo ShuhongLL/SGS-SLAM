@@ -8,7 +8,6 @@ natsort
 pyyaml
 wandb
 lpips
-h5py
 open3d==0.16.0
 torchmetrics
 cyclonedds

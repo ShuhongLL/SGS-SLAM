@@ -1,23 +1,19 @@
 import os
 from os.path import join as p_join
-from datetime import datetime
 
 scenes = ["room0", "room1", "room2",
-          "office0", "office2",
+          "office0", "office1", "office2",
           "office3", "office4"]
 
 primary_device="cuda:1"
 seed = 0
-scene_name = "room1"
+scene_name = "office1"
 
 map_every = 1
 keyframe_every = 5
 mapping_window_size = 24
 tracking_iters = 40
 mapping_iters = 60
-
-now = datetime.now()
-formatted_time = now.strftime("%Y%m%d_%H%M")
 
 group_name = "Replica"
 run_name = f"{scene_name}_{seed}_semantic"
@@ -30,7 +26,7 @@ config = dict(
     map_every=map_every, # Mapping every nth frame
     keyframe_every=keyframe_every, # Keyframe every nth frame
     mapping_window_size=mapping_window_size, # Mapping window size
-    report_global_progress_every=20, # Report Global Progress every nth frame
+    report_global_progress_every=500, # Report Global Progress every nth frame
     eval_every=5, # Evaluate every nth frame (at end of SLAM)
     scene_radius_depth_ratio=3, # Max First Frame Depth to Scene Radius Ratio (For Pruning/Densification)
     mean_sq_dist_method="projective", # ["projective", "knn"] (Type of Mean Squared Distance Calculation for Scale of Gaussians)
@@ -52,14 +48,14 @@ config = dict(
         basedir="./data/Replica",
         gradslam_data_cfg="./configs/data/replica.yaml",
         sequence=scene_name,
-        desired_image_height=480,
-        desired_image_width=640,
+        desired_image_height=680,
+        desired_image_width=1200,
         start=0,
         end=-1,
         stride=1,
-        num_frames=-1, # -1 to use all available frames
+        num_frames=-1,
         load_semantics=True,
-        num_semantic_classes=49
+        num_semantic_classes=101
     ),
     tracking=dict(
         use_gt_poses=False, # Use GT Poses for Tracking
@@ -142,7 +138,6 @@ config = dict(
         viz_fps=5, # FPS for Online Recon Viz
         enter_interactive_post_online=True, # Enter Interactive Mode after Online Recon Viz
         scene_name = scene_name,
-        color_dict_path="./data/Replica/color_dict.json",
-        load_semantics=True, # Whether load semantic information
+        load_semantics=False, # Whether load semantic information
     ),
 )
