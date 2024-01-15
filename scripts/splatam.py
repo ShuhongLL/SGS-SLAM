@@ -323,14 +323,17 @@ def get_loss(params, curr_data, variables, iter_time_idx, loss_weights, use_sil_
         color_mask = torch.tile(mask, (3, 1, 1))
         color_mask = color_mask.detach()
         losses['im'] = torch.abs(curr_data['im'] - im)[color_mask].sum()
+        if load_semantics:
+            losses['seg'] = torch.abs(curr_data['semantic_color'] - rendered_seg)[color_mask].sum()
     elif tracking:
         losses['im'] = torch.abs(curr_data['im'] - im).sum()
+        if load_semantics:
+            losses['seg'] = torch.abs(curr_data['semantic_color'] - rendered_seg).sum()
     else:
         losses['im'] = 0.8 * l1_loss_v1(im, curr_data['im']) + 0.2 * (1.0 - calc_ssim(im, curr_data['im']))
-
-    if load_semantics:
-        losses['seg'] = 0.8 * l1_loss_v1(rendered_seg, curr_data['semantic_color']) \
-            + 0.2 * (1.0 - calc_ssim(rendered_seg, curr_data['semantic_color']))
+        if load_semantics:
+            losses['seg'] = 0.8 * l1_loss_v1(rendered_seg, curr_data['semantic_color']) \
+                + 0.2 * (1.0 - calc_ssim(rendered_seg, curr_data['semantic_color']))
 
     # TODO :: modify the plt
     # Visualize the Diff Images
@@ -672,7 +675,6 @@ def rgbd_slam(config: dict):
     mapping_frame_time_sum = 0
     mapping_frame_time_count = 0
 
-    # TODO: handle semantics
     # Load Checkpoint
     if config['load_checkpoint']:
         checkpoint_time_idx = config['checkpoint_time_idx']
@@ -690,7 +692,10 @@ def rgbd_slam(config: dict):
         # Update the ground truth poses list
         for time_idx in range(checkpoint_time_idx):
             # Load RGBD frames incrementally instead of all frames
-            color, depth, _, gt_pose = dataset[time_idx]
+            if load_semantics:
+                color, depth, _, gt_pose, semantic_id, semantic_color = dataset[time_idx]
+            else:
+                color, depth, _, gt_pose = dataset[time_idx]
             # Process poses
             gt_w2c = torch.linalg.inv(gt_pose)
             gt_w2c_all_frames.append(gt_w2c)
@@ -706,6 +711,12 @@ def rgbd_slam(config: dict):
                 color = color.permute(2, 0, 1) / 255
                 depth = depth.permute(2, 0, 1)
                 curr_keyframe = {'id': time_idx, 'est_w2c': curr_w2c, 'color': color, 'depth': depth}
+
+                if load_semantics:
+                    semantic_id = semantic_id.permute(2, 0, 1)
+                    semantic_color = semantic_color.permute(2, 0, 1) / 255
+                    curr_keyframe['semantic_id'] = semantic_id
+                    curr_keyframe['semantic_color'] = semantic_color
                 # Add to keyframe list
                 keyframe_list.append(curr_keyframe)
     else:
@@ -960,7 +971,6 @@ def rgbd_slam(config: dict):
                             wandb_run.log({"Mapping/Number of Gaussians - Pruning": params['means3D'].shape[0],
                                            "Mapping/step": wandb_mapping_step})
                     # Gaussian-Splatting's Gradient-based Densification
-                    # TODO :: add semantics similar like post_splatam
                     if config['mapping']['use_gaussian_splatting_densification']:
                         params, variables = densify(params, variables, optimizer, iter, config['mapping']['densify_dict'], params_opt_exclude, device=device)
                         if config['use_wandb']:

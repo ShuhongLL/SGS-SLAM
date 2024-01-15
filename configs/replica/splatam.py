@@ -5,9 +5,9 @@ scenes = ["room0", "room1", "room2",
           "office0", "office1", "office2",
           "office3", "office4"]
 
-primary_device="cuda:1"
+primary_device="cuda:0"
 seed = 0
-scene_name = "office1"
+scene_name = "office0"
 
 map_every = 1
 keyframe_every = 5
@@ -15,8 +15,8 @@ mapping_window_size = 24
 tracking_iters = 40
 mapping_iters = 60
 
-group_name = "Replica"
-run_name = f"{scene_name}_{seed}_semantic"
+group_name = "Replica_track"
+run_name = f"{scene_name}_{seed}"
 
 config = dict(
     workdir=f"./experiments/{group_name}",
@@ -68,7 +68,7 @@ config = dict(
         loss_weights=dict(
             im=0.5,
             depth=1.0,
-            seg=0.0
+            seg=0.1 # 0.1
         ),
         lrs=dict(
             means3D=0.0,

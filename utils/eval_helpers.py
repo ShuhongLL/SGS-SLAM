@@ -346,13 +346,15 @@ def report_progress(params, data, i, progress_bar, iter_time_idx, sil_thres, eve
                                  psnr, depth_l1, fig_title, seg=gt_seg, rastered_seg=rastered_seg, wandb_run=wandb_run,
                                  wandb_step=wandb_step, wandb_title=f"{stage} Qual Viz")
 
-# TODO:: add semantics
+
 def eval_online(dataset, all_params, num_frames, eval_online_dir, sil_thres, mapping_iters,
-                add_new_gaussians, device="cuda", wandb_run=None, wandb_save_qual=False, eval_every=1):
+                add_new_gaussians, device="cuda", load_semantics=False, wandb_run=None,
+                wandb_save_qual=False, eval_every=1):
     print("Evaluating Online Final Parameters...")
     psnr_list = []
     rmse_list = []
     l1_list = []
+    miou_list = []
     plot_dir = os.path.join(eval_online_dir, "plots")
     os.makedirs(plot_dir, exist_ok=True)
 
@@ -362,8 +364,14 @@ def eval_online(dataset, all_params, num_frames, eval_online_dir, sil_thres, map
         # Get Params for current frame
         params = all_params[time_idx]
 
-        # Get RGB-D Data & Camera Parameters
-        color, depth, intrinsics, pose = dataset[time_idx]
+        if load_semantics:
+            color, depth, intrinsics, pose, semantic_id, semantic_color = dataset[time_idx]
+            semantic_id = semantic_id.permute(2, 0, 1) # (H, W, 1) -> (1, H, W)
+            semantic_color = semantic_color.permute(2, 0, 1) / 255 # (H, W, C) -> (C, H, W)
+        else:
+            color, depth, intrinsics, pose = dataset[time_idx]
+
+        # Get Camera Parameters
         intrinsics = intrinsics[:3, :3]
 
         # Process RGB-D Data
@@ -379,6 +387,10 @@ def eval_online(dataset, all_params, num_frames, eval_online_dir, sil_thres, map
         
         # Define current frame data
         curr_data = {'cam': cam, 'im': color, 'depth': depth, 'id': time_idx, 'intrinsics': intrinsics, 'w2c': first_frame_w2c}
+
+        if load_semantics:
+            curr_data['semantic_id'] = semantic_id
+            curr_data['semantic_color'] = semantic_color
 
         # Get current frame Gaussians
         transformed_pts = transform_to_frame(params, time_idx, 
@@ -424,43 +436,72 @@ def eval_online(dataset, all_params, num_frames, eval_online_dir, sil_thres, map
         rmse_list.append(rmse.cpu().numpy())
         l1_list.append(depth_l1.cpu().numpy())
 
+        if load_semantics:
+            # Render semantic color map
+            semantic_rendervar = transformed_semantics2rendervar(params, transformed_pts, device=device)
+            rastered_seg, _, _, = Renderer(raster_settings=curr_data['cam'])(**semantic_rendervar)
+            gt_seg = curr_data['semantic_color']
+
+            # Calcualte mIoU scores
+            rastered_seg = recolor_semantic_img(rastered_seg, gt_seg)
+            miou = evaluate_miou(rastered_seg, gt_seg)
+            miou_list.append(miou.cpu().numpy())
+        else:
+            rastered_seg = None
+            gt_seg = None
+
         # Plot the Ground Truth and Rasterized RGB & Depth, along with Silhouette
         fig_title = "Time Step: {}".format(time_idx)
         plot_name = "%04d" % time_idx
         presence_sil_mask = presence_sil_mask.detach().cpu().numpy()
         if wandb_run is None:
             plot_rgbd_silhouette(color, depth, im, rastered_depth, presence_sil_mask, diff_depth_l1,
-                                 psnr, depth_l1, fig_title, plot_dir, plot_name=plot_name, save_plot=True)
+                                 psnr, depth_l1, fig_title, plot_dir, plot_name=plot_name, save_plot=True,
+                                 seg=gt_seg, rastered_seg=rastered_seg)
         elif wandb_save_qual:
             plot_rgbd_silhouette(color, depth, im, rastered_depth, presence_sil_mask, diff_depth_l1,
                                  psnr, depth_l1, fig_title, plot_dir, plot_name=plot_name, save_plot=True,
-                                 wandb_run=wandb_run, wandb_step=None, 
+                                 seg=gt_seg, rastered_seg=rastered_seg, wandb_run=wandb_run, wandb_step=None, 
                                  wandb_title="Online Eval/Qual Viz")
     
     # Compute Average Metrics
     psnr_list = np.array(psnr_list)
     rmse_list = np.array(rmse_list)
     l1_list = np.array(l1_list)
+    miou_list = np.array(miou_list)
     avg_psnr = psnr_list.mean()
     avg_rmse = rmse_list.mean()
     avg_l1 = l1_list.mean()
+    avg_miou = miou_list.mean() if miou_list.size > 0 else 0
     print("Online Average PSNR: {:.2f}".format(avg_psnr))
     print("Online Average Depth RMSE: {:.2f}".format(avg_rmse))
     print("Online Average Depth L1: {:.2f}".format(avg_l1))
+    print("Average mIoU: {:.4f}".format(avg_miou))
 
     if wandb_run is not None:
         wandb_run.log({"Final Stats/Online Average PSNR": avg_psnr, 
                        "Final Stats/Online Average Depth RMSE": avg_rmse,
                        "Final Stats/Online Average Depth L1": avg_l1,
-                       "Final Stats/step": 1})
+                       "Final Stats/step": 1,
+                       "Final Stats/Average mIoU": avg_miou})
 
     # Save metric lists as text files
     np.savetxt(os.path.join(eval_online_dir, "online_psnr.txt"), psnr_list)
     np.savetxt(os.path.join(eval_online_dir, "online_rmse.txt"), rmse_list)
     np.savetxt(os.path.join(eval_online_dir, "online_l1.txt"), l1_list)
 
+    if load_semantics:
+        np.savetxt(os.path.join(eval_dir, "miou.txt"), miou_list)
+
+        fig, axs = plt.subplots(1, 3, figsize=(18, 4))
+        axs[2].plot(np.arange(len(miou_list)), miou_list)
+        axs[2].set_title("mIoU")
+        axs[2].set_xlabel("Time Step")
+        axs[2].set_ylabel("mIoU")
+    else:
+        fig, axs = plt.subplots(1, 2, figsize=(12, 4))
+
     # Plot PSNR & L1 as line plots
-    fig, axs = plt.subplots(1, 2, figsize=(12, 4))
     axs[0].plot(np.arange(len(psnr_list)), psnr_list)
     axs[0].set_title("RGB PSNR")
     axs[0].set_xlabel("Time Step")
@@ -469,7 +510,8 @@ def eval_online(dataset, all_params, num_frames, eval_online_dir, sil_thres, map
     axs[1].set_title("Depth L1")
     axs[1].set_xlabel("Time Step")
     axs[1].set_ylabel("L1")
-    fig.suptitle("Average PSNR: {:.2f}, Average Depth L1: {:.2f}".format(avg_psnr, avg_l1), y=1.05, fontsize=16)
+    fig.suptitle("Average PSNR: {:.2f}, Average Depth L1: {:.2f}, Average mIoU: {:.4f}".format(avg_psnr, avg_l1, avg_miou),
+                 y=1.05, fontsize=16)
     plt.savefig(os.path.join(eval_online_dir, "online_metrics.png"), bbox_inches='tight')
     if wandb_run is not None:
         wandb_run.log({"Online Eval/Metrics": fig})
@@ -535,6 +577,10 @@ def eval(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_iters,
         # Define current frame data
         curr_data = {'cam': cam, 'im': color, 'depth': depth, 'id': time_idx, 'intrinsics': intrinsics, 'w2c': first_frame_w2c}
 
+        if load_semantics:
+            curr_data['semantic_id'] = semantic_id
+            curr_data['semantic_color'] = semantic_color
+
         # Initialize Render Variables
         rendervar = transformed_params2rendervar(final_params, transformed_pts, device=device)
         depth_sil_rendervar = transformed_params2depthplussilhouette(final_params, curr_data['w2c'],
@@ -588,12 +634,10 @@ def eval(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_iters,
         l1_list.append(depth_l1.cpu().numpy())
 
         if load_semantics:
-            curr_data['semantic_id'] = semantic_id
-            curr_data['semantic_color'] = semantic_color
             # Render semantic color map
             semantic_rendervar = transformed_semantics2rendervar(final_params, transformed_pts, device=device)
             rastered_seg, _, _, = Renderer(raster_settings=curr_data['cam'])(**semantic_rendervar)
-            gt_seg = semantic_color
+            gt_seg = curr_data['semantic_color']
 
             # Calcualte mIoU scores
             rastered_seg = recolor_semantic_img(rastered_seg, gt_seg)
@@ -677,12 +721,13 @@ def eval(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_iters,
     ssim_list = np.array(ssim_list)
     lpips_list = np.array(lpips_list)
     miou_list = np.array(miou_list)
+
     avg_psnr = psnr_list.mean()
     avg_rmse = rmse_list.mean()
     avg_l1 = l1_list.mean()
     avg_ssim = ssim_list.mean()
     avg_lpips = lpips_list.mean()
-    avg_miou = 0 if miou_list.size == 0 else miou_list.mean()
+    avg_miou = miou_list.mean() if miou_list.size > 0 else 0
     print("Average PSNR: {:.2f}".format(avg_psnr))
     print("Average Depth RMSE: {:.2f} cm".format(avg_rmse*100))
     print("Average Depth L1: {:.2f} cm".format(avg_l1*100))
@@ -706,7 +751,6 @@ def eval(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_iters,
     np.savetxt(os.path.join(eval_dir, "ssim.txt"), ssim_list)
     np.savetxt(os.path.join(eval_dir, "lpips.txt"), lpips_list)
 
-    # Check if load_semantics is set to True
     if load_semantics:
         np.savetxt(os.path.join(eval_dir, "miou.txt"), miou_list)
         fig, axs = plt.subplots(1, 3, figsize=(18, 4))
@@ -735,10 +779,9 @@ def eval(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_iters,
         wandb_run.log({"Eval/Metrics": fig})
     plt.close()
 
-# TODO:: add semantics
-def eval_nvs(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_iters,
-             add_new_gaussians, device="cuda", wandb_run=None, wandb_save_qual=False,
-             eval_every=1, save_frames=False):
+
+def eval_nvs(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_iters, add_new_gaussians,
+             device="cuda", load_semantics=False, wandb_run=None, wandb_save_qual=False, eval_every=1, save_frames=False):
     print("Evaluating Final Parameters for Novel View Synthesis ...")
     psnr_list = []
     rmse_list = []
@@ -746,6 +789,7 @@ def eval_nvs(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_ite
     lpips_list = []
     ssim_list = []
     valid_nvs_frames = []
+    miou_list = []
     plot_dir = os.path.join(eval_dir, "plots")
     os.makedirs(plot_dir, exist_ok=True)
     if save_frames:
@@ -758,9 +802,21 @@ def eval_nvs(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_ite
         depth_dir = os.path.join(eval_dir, "depth")
         os.makedirs(depth_dir, exist_ok=True)
 
+        if load_semantics:
+            render_seg_dir = os.path.join(eval_dir, "rendered_semantic")
+            os.makedirs(render_seg_dir, exist_ok=True)
+            seg_dir = os.path.join(eval_dir, "semantic")
+            os.makedirs(seg_dir, exist_ok=True)
+
     for time_idx in tqdm(range(num_frames)):
          # Get RGB-D Data & Camera Parameters
-        color, depth, intrinsics, pose = dataset[time_idx]
+        if load_semantics:
+            color, depth, intrinsics, pose, semantic_id, semantic_color = dataset[time_idx]
+            semantic_id = semantic_id.permute(2, 0, 1) # (H, W, 1) -> (1, H, W)
+            semantic_color = semantic_color.permute(2, 0, 1) / 255 # (H, W, C) -> (C, H, W)
+        else:
+            color, depth, intrinsics, pose = dataset[time_idx]
+
         gt_w2c = torch.linalg.inv(pose)
         intrinsics = intrinsics[:3, :3]
 
@@ -790,6 +846,9 @@ def eval_nvs(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_ite
  
         # Define current frame data
         curr_data = {'cam': cam, 'im': color, 'depth': depth, 'id': time_idx, 'intrinsics': intrinsics, 'w2c': first_frame_w2c}
+        if load_semantics:
+            curr_data['semantic_id'] = semantic_id
+            curr_data['semantic_color'] = semantic_color
 
         # Initialize Render Variables
         rendervar = transformed_params2rendervar(final_params, transformed_pts, device=device)
@@ -852,6 +911,20 @@ def eval_nvs(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_ite
         rmse_list.append(rmse.cpu().numpy())
         l1_list.append(depth_l1.cpu().numpy())
 
+        if load_semantics:
+            # Render semantic color map
+            semantic_rendervar = transformed_semantics2rendervar(final_params, transformed_pts, device=device)
+            rastered_seg, _, _, = Renderer(raster_settings=curr_data['cam'])(**semantic_rendervar)
+            gt_seg = curr_data['semantic_color']
+
+            # Calcualte mIoU scores
+            rastered_seg = recolor_semantic_img(rastered_seg, gt_seg)
+            miou = evaluate_miou(rastered_seg, gt_seg)
+            miou_list.append(miou.cpu().numpy())
+        else:
+            rastered_seg = None
+            gt_seg = None
+
         if save_frames:
             # Save Rendered RGB and Depth
             viz_render_im = torch.clamp(im, 0, 1)
@@ -872,6 +945,15 @@ def eval_nvs(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_ite
             depth_colormap = cv2.applyColorMap((normalized_depth * 255).astype(np.uint8), cv2.COLORMAP_JET)
             cv2.imwrite(os.path.join(rgb_dir, "gt_{:04d}.png".format(test_time_idx)), cv2.cvtColor(viz_gt_im*255, cv2.COLOR_RGB2BGR))
             cv2.imwrite(os.path.join(depth_dir, "gt_{:04d}.png".format(test_time_idx)), depth_colormap)
+
+            if load_semantics:
+                viz_render_seg = torch.clamp(rastered_seg, 0, 1)
+                viz_render_seg = viz_render_seg.detach().cpu().permute(1, 2, 0).numpy()
+                cv2.imwrite(os.path.join(render_seg_dir, "splatam_{:04d}.png".format(test_time_idx)), cv2.cvtColor(viz_render_seg*255, cv2.COLOR_RGB2BGR))
+                # Save GT
+                viz_gt_seg = torch.clamp(gt_seg, 0, 1)
+                viz_gt_seg = viz_gt_seg.detach().cpu().permute(1, 2, 0).numpy()
+                cv2.imwrite(os.path.join(seg_dir, "gt_{:04d}.png".format(test_time_idx)), cv2.cvtColor(viz_gt_seg*255, cv2.COLOR_RGB2BGR))
         
         # Plot the Ground Truth and Rasterized RGB & Depth, along with Silhouette
         fig_title = "Time Step: {}".format(test_time_idx)
@@ -879,13 +961,12 @@ def eval_nvs(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_ite
         presence_sil_mask = presence_sil_mask.detach().cpu().numpy()
         if wandb_run is None:
             plot_rgbd_silhouette(color, depth, im, rastered_depth_viz, presence_sil_mask, diff_depth_l1,
-                                 psnr, depth_l1, fig_title, plot_dir, 
-                                 plot_name=plot_name, save_plot=True)
+                                 psnr, depth_l1, fig_title, plot_dir, plot_name=plot_name, save_plot=True,
+                                 seg=gt_seg, rastered_seg=rastered_seg)
         elif wandb_save_qual:
             plot_rgbd_silhouette(color, depth, im, rastered_depth_viz, presence_sil_mask, diff_depth_l1,
-                                 psnr, depth_l1, fig_title, plot_dir, 
-                                 plot_name=plot_name, save_plot=True,
-                                 wandb_run=wandb_run, wandb_step=None, 
+                                 psnr, depth_l1, fig_title, plot_dir, plot_name=plot_name, save_plot=True,
+                                 seg=gt_seg, rastered_seg=rastered_seg, wandb_run=wandb_run, wandb_step=None, 
                                  wandb_title="Eval/Qual Viz")
 
     # Compute Average Metrics based on valid NVS frames
@@ -895,16 +976,20 @@ def eval_nvs(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_ite
     ssim_list = np.array(ssim_list)
     lpips_list = np.array(lpips_list)
     valid_nvs_frames = np.array(valid_nvs_frames)
+    miou_list = np.array(miou_list)
+
     avg_psnr = psnr_list[valid_nvs_frames].mean()
     avg_rmse = rmse_list[valid_nvs_frames].mean()
     avg_l1 = l1_list[valid_nvs_frames].mean()
     avg_ssim = ssim_list[valid_nvs_frames].mean()
     avg_lpips = lpips_list[valid_nvs_frames].mean()
+    avg_miou = miou_list.mean() if miou_list.size > 0 else 0
     print("Average PSNR: {:.2f}".format(avg_psnr))
     print("Average Depth RMSE: {:.2f} cm".format(avg_rmse*100))
     print("Average Depth L1: {:.2f} cm".format(avg_l1*100))
     print("Average MS-SSIM: {:.3f}".format(avg_ssim))
     print("Average LPIPS: {:.3f}".format(avg_lpips))
+    print("Average mIoU: {:.4f}".format(avg_miou))
 
     if wandb_run is not None:
         wandb_run.log({"Final Stats/Average PSNR": avg_psnr, 
@@ -912,7 +997,8 @@ def eval_nvs(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_ite
                        "Final Stats/Average Depth L1": avg_l1,
                        "Final Stats/Average MS-SSIM": avg_ssim, 
                        "Final Stats/Average LPIPS": avg_lpips,
-                       "Final Stats/step": 1})
+                       "Final Stats/step": 1,
+                       "Final Stats/Average mIoU": avg_miou})
 
     # Save metric lists as text files
     np.savetxt(os.path.join(eval_dir, "psnr.txt"), psnr_list)
@@ -924,8 +1010,18 @@ def eval_nvs(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_ite
     # Save metadata for valid NVS frames
     np.save(os.path.join(eval_dir, "valid_nvs_frames.npy"), valid_nvs_frames)
 
+    if load_semantics:
+        np.savetxt(os.path.join(eval_dir, "miou.txt"), miou_list)
+
+        fig, axs = plt.subplots(1, 3, figsize=(18, 4))
+        axs[2].plot(np.arange(len(miou_list)), miou_list)
+        axs[2].set_title("mIoU")
+        axs[2].set_xlabel("Time Step")
+        axs[2].set_ylabel("mIoU")
+    else:
+        fig, axs = plt.subplots(1, 2, figsize=(12, 4))
+
     # Plot PSNR & L1 as line plots
-    fig, axs = plt.subplots(1, 2, figsize=(12, 4))
     axs[0].plot(np.arange(len(psnr_list)), psnr_list)
     axs[0].set_title("RGB PSNR")
     axs[0].set_xlabel("Time Step")
@@ -934,7 +1030,8 @@ def eval_nvs(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_ite
     axs[1].set_title("Depth L1")
     axs[1].set_xlabel("Time Step")
     axs[1].set_ylabel("L1 (cm)")
-    fig.suptitle("Average PSNR: {:.2f}, Average Depth L1: {:.2f} cm".format(avg_psnr, avg_l1*100), y=1.05, fontsize=16)
+    fig.suptitle("Average PSNR: {:.2f}, Average Depth L1: {:.2f} cm, Average mIoU: {:.4f}".format(avg_psnr, avg_l1*100, avg_miou),
+                  y=1.05, fontsize=16)
     plt.savefig(os.path.join(eval_dir, "metrics.png"), bbox_inches='tight')
     if wandb_run is not None:
         wandb_run.log({"Eval/Metrics": fig})
