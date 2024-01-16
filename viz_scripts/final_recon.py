@@ -41,6 +41,7 @@ def load_camera(cfg, scene_path):
 def load_scene_data(scene_path, first_frame_w2c, intrinsics, load_semantics=False):
     # Load Scene Data
     all_params = dict(np.load(scene_path, allow_pickle=True))
+
     for k in all_params.keys():
         if k == 'semantic_id':
             all_params[k] = torch.tensor(all_params[k]).cuda().int() # semantic_id has dtype int
@@ -197,6 +198,19 @@ def rgbd2pcd(color, depth, w2c, intrinsics, cfg):
     return pts, cols
 
 
+def rotate_camera_horizon(theta, view_w2c):
+    # Create the horizontal rotation matrix
+    rotation_matrix = np.array([
+        [np.cos(theta), 0, np.sin(theta), 0],
+        [0, 1, 0, 0],
+        [-np.sin(theta), 0, np.cos(theta), 0],
+        [0, 0, 0, 1]
+    ])
+
+    view_w2c = rotation_matrix @ view_w2c
+    return view_w2c
+
+
 def visualize(scene_path, cfg):
     # Load Scene Data
     w2c, k = load_camera(cfg, scene_path)
@@ -264,17 +278,27 @@ def visualize(scene_path, cfg):
     view_k[2, 2] = 1
     view_control = vis.get_view_control()
     cparams = o3d.camera.PinholeCameraParameters()
-    # if cfg['offset_first_viz_cam']:
-    #     view_w2c = w2c
-    #     view_w2c[:3, 3] = view_w2c[:3, 3] + np.array([0, 0, 0.5])
-    # else:
-    #     view_w2c = w2c
-    view_w2c = np.array([
-        [ 1,  0,  0,  0],
-        [ 0,  0, -1,  0],
-        [ 0, -1,  0,  10],
-        [ 0,  0,  0,  1]
-    ])
+
+    if cfg['offset_first_viz_cam']:
+        view_w2c = w2c
+        view_w2c[:3, 3] = view_w2c[:3, 3] + np.array([0, 0, 0.5])
+    else:
+        view_w2c = w2c
+
+    # view_w2c_horizontal = np.array([
+    #     [1, 0, 0, 0],
+    #     [0, 1, 0, 0],
+    #     [0, 0, -1, 1],
+    #     [0, 0, 0, 1]
+    # ])
+
+    # view_w2c_vertical = np.array([
+    #     [ 1,  0,  0,  0],
+    #     [ 0,  0, -1,  0],
+    #     [ 0, -1,  0,  3],
+    #     [ 0,  0,  0,  1]
+    # ])
+
     cparams.extrinsic = view_w2c
     cparams.intrinsic.intrinsic_matrix = view_k
     cparams.intrinsic.height = int(cfg['viz_h'] * cfg['view_scale'])
@@ -285,11 +309,8 @@ def visualize(scene_path, cfg):
     render_options.point_size = cfg['view_scale']
     render_options.light_on = False
 
-    if load_semantics:
-        semantic_exclude = [32] #[38]
-        semantic_exclude = torch.tensor(semantic_exclude).cuda()
-        for to_remove_id in semantic_exclude:
-            render_mask &= (semantic_ids.squeeze() != to_remove_id)
+    theta = 0
+    d_theta = np.pi / 90
 
     # Interactive Rendering
     while True:
@@ -298,7 +319,6 @@ def visualize(scene_path, cfg):
         k = view_k / cfg['view_scale']
         k[2, 2] = 1
         w2c = cam_params.extrinsic
-        print(w2c)
 
         if cfg['render_mode'] == 'centers':
             pts = o3d.utility.Vector3dVector(scene_data['means3D'][render_mask].contiguous().double().cpu().numpy())
@@ -320,6 +340,10 @@ def visualize(scene_path, cfg):
         if not vis.poll_events():
             break
         vis.update_renderer()
+
+        # theta += d_theta        
+        # cam_params.extrinsic = rotate_camera_horizon(theta, view_w2c_horizontal)
+        # view_control.convert_from_pinhole_camera_parameters(cam_params, allow_arbitrary=True)
 
     # Cleanup
     vis.destroy_window()

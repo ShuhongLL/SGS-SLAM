@@ -35,6 +35,8 @@ command_queue = Queue()
 class Operation(Enum):
     SWITCH_MODE = 1
     APPLY_MASK = 2
+    CAM_TRANS = 3
+    CAM_ROTATE = 4
 
 
 class ControlPanel(tk.Frame):
@@ -48,10 +50,10 @@ class ControlPanel(tk.Frame):
         self.semantic_ids_label = tk.Label(master, text='Semantic IDs:')
         self.semantic_ids_label.pack()
 
-        with open(cfg['color_dict_path'], 'r') as file:
-            self.color_dict = json.load(file)
+        # with open(cfg['color_dict_path'], 'r') as file:
+        #     self.color_dict = json.load(file)
         self.sence_name = cfg['scene_name']
-        self.semantic_ids = set(self.color_dict[self.sence_name].keys())
+        self.semantic_ids = set([0])
 
         self.semantic_ids_value = tk.Label(master, text=', '.join(str(num) for num in sorted(self.semantic_ids)))
         self.semantic_ids_value.pack()
@@ -84,6 +86,10 @@ class ControlPanel(tk.Frame):
         self.keep_checkbox = tk.Checkbutton(master, text='Keep', variable=self.keep_var)
         self.keep_checkbox.pack()
 
+        # Create buttons for moving and rotating
+        self.create_buttons("Transition", ["X", "Y", "Z"], "move", "-", "+")
+        self.create_buttons("Rotation", ["X", "Y", "Z"], "rotate", "-", "+")
+
         # Apply / Reset buttons
         self.apply_button = tk.Button(master, text='Apply', command=self.apply)
         self.apply_button.pack(side=tk.LEFT)
@@ -106,10 +112,46 @@ class ControlPanel(tk.Frame):
                 'to_keep': keep
                 }
             }
-            print("Apply: ", cmd)
+            # print("Apply: ", cmd)
             self.command_queue.put(cmd)
         else:
             print("Invalid Apply: ", semantic_id)
+
+    def create_buttons(self, action, directions, transform_type, minus_text, plus_text):
+        action_label = tk.Label(self.master, text=f"{action}:")
+        action_label.pack()
+
+        for direction in directions:
+            button_frame = tk.Frame(self.master)
+            button_frame.pack()
+
+            label = tk.Label(button_frame, text=f"{direction}:")
+            label.pack(side=tk.LEFT)
+
+            minus_button = tk.Button(button_frame, text=f"{minus_text}", command=lambda d=direction: self.perform_transform(transform_type, d, -1))
+            minus_button.pack(side=tk.LEFT)
+
+            plus_button = tk.Button(button_frame, text=f"{plus_text}", command=lambda d=direction: self.perform_transform(transform_type, d, 1))
+            plus_button.pack(side=tk.LEFT)
+
+    def perform_transform(self, transform_type, direction, factor):
+        if transform_type == 'move':
+            self.command_queue.put({
+                'type': Operation.CAM_TRANS,
+                'payload': {
+                    'direction': direction,
+                    'factor': factor,
+                }
+            })
+        elif transform_type == 'rotate':
+            self.command_queue.put({
+                'type': Operation.CAM_ROTATE,
+                'payload': {
+                    'direction': direction,
+                    'factor': factor,
+                }
+            })
+
 
     def reset(self):
         # Here you would handle the resetting of the settings to their defaults
@@ -129,6 +171,98 @@ class ControlPanel(tk.Frame):
                 'semantic_id': -2,
             }
         })
+
+def move_camera_x(current_pose, distance):
+    """
+    Move the camera along the X-axis by a gven distance.
+    """
+    new_pose = current_pose.copy()
+    translation_matrix = np.identity(4)
+    translation_matrix[0, 3] = distance
+    new_pose = new_pose @ translation_matrix
+    return new_pose
+
+def move_camera_y(current_pose, distance):
+    """
+    Move the camera along the Y-axis by a gven distance.
+    """
+    new_pose = current_pose.copy()
+    translation_matrix = np.identity(4)
+    translation_matrix[1, 3] = distance
+    new_pose = new_pose @ translation_matrix
+    return new_pose
+
+def move_camera_z(current_pose, distance):
+    """
+    Move the camera along the Z-axis by a gven distance.
+    """
+    new_pose = current_pose.copy()
+    translation_matrix = np.identity(4)
+    translation_matrix[2, 3] = distance
+    new_pose = new_pose @ translation_matrix
+    return new_pose
+
+def rotate_camera_x(current_pose, theta_degrees):
+    """
+    Rotate the camera around the X-axis by a gven angle in degrees.
+    """
+    new_pose = current_pose.copy()
+    theta_radians = np.radians(theta_degrees)
+    rotation_matrix = np.array([[1, 0, 0, 0],
+                                [0, np.cos(theta_radians), -np.sin(theta_radians), 0],
+                                [0, np.sin(theta_radians), np.cos(theta_radians), 0],
+                                [0, 0, 0, 1]])
+    new_pose = new_pose @ rotation_matrix
+    return new_pose
+
+def rotate_camera_y(current_pose, theta_degrees):
+    """
+    Rotate the camera around the Y-axis by a gven angle in degrees.
+    """
+    new_pose = current_pose.copy()
+    theta_radians = np.radians(theta_degrees)
+    rotation_matrix = np.array([[np.cos(theta_radians), 0, np.sin(theta_radians), 0],
+                                [0, 1, 0, 0],
+                                [-np.sin(theta_radians), 0, np.cos(theta_radians), 0],
+                                [0, 0, 0, 1]])
+    new_pose = new_pose @ rotation_matrix
+    return new_pose
+
+def rotate_camera_z(current_pose, theta_degrees):
+    """
+    Rotate the camera around the Z-axis by a gven angle in degrees.
+    """
+    new_pose = current_pose.copy()
+    theta_radians = np.radians(theta_degrees)
+    rotation_matrix = np.array([[np.cos(theta_radians), -np.sin(theta_radians), 0, 0],
+                                [np.sin(theta_radians), np.cos(theta_radians), 0, 0],
+                                [0, 0, 1, 0],
+                                [0, 0, 0, 1]])
+    new_pose = new_pose @ rotation_matrix
+    return new_pose
+
+def print_camera_pose(extrinsic_matrix):
+    """
+    Prints the x, y, and z axes from a camera's extrinsic matrix.
+
+    Parameters:
+    extrinsic_matrix (numpy array): A 4x4 extrinsic matrix of the camera.
+    """
+
+    # Check if the matrix is 4x4
+    if extrinsic_matrix.shape != (4, 4):
+        raise ValueError("Extrinsic matrix must be a 4x4 matrix.")
+
+    # Extracting the rotation matrix (top-left 3x3)
+    rotation_matrix = extrinsic_matrix[:3, :3]
+
+    # The columns of the rotation matrix are the x, y, and z axes
+    x_axis = rotation_matrix[:, 0]
+    y_axis = rotation_matrix[:, 1]
+    z_axis = rotation_matrix[:, 2]
+
+    print(f"Camera position: X = {x_axis}, Y = {y_axis}, Z = {z_axis}")
+    print(f"Camera extrinsic: {extrinsic_matrix}")
 
 def visualize(scene_path, cfg):
     # Load Scene Data
@@ -193,6 +327,10 @@ def visualize(scene_path, cfg):
         vis.add_geometry(lines)
 
     # Initialize View Control
+
+    focal_length_scale_factor = 0.8  # Adjust this factor to control the FOV. Less than 1.0 will increase FOV.
+    k[0, 0] *= focal_length_scale_factor
+    k[1, 1] *= focal_length_scale_factor
     view_k = k * cfg['view_scale']
     view_k[2, 2] = 1
     view_control = vis.get_view_control()
@@ -202,6 +340,21 @@ def visualize(scene_path, cfg):
         view_w2c[:3, 3] = view_w2c[:3, 3] + np.array([0, 0, 0.5])
     else:
         view_w2c = w2c
+
+    # office 0
+    # view_w2c = torch.tensor([
+    #     [ 0.70209127, -0.13496379, -0.69917996,  0.43850798],
+    #     [-0.71173069, -0.16405851, -0.68302579,  0.66471529],
+    #     [-0.02252267,  0.97717428, -0.21124192,  2.99909543],
+    #     [ 0.,          0.,          0.,          1.,       ]])
+
+    # room 1
+    view_w2c = torch.tensor([
+        [-0.8013449,   0.12381213,  0.58524944,  0.49100344],
+        [ 0.59813435,  0.15106045,  0.78702988, -0.84853509],
+        [ 0.0090358,   0.98074018, -0.1951078,   3.51860213],
+        [ 0.,          0.,          0.,          1.        ]])
+
     cparams.extrinsic = view_w2c
     cparams.intrinsic.intrinsic_matrix = view_k
     cparams.intrinsic.height = int(cfg['viz_h'] * cfg['view_scale'])
@@ -219,12 +372,22 @@ def visualize(scene_path, cfg):
     #         render_mask &= (semantic_ids.squeeze() != to_remove_id)
 
     render_mode = cfg['render_mode']
+    delta_trans = 0.2
+    delta_rotate = 2.5
+    set_camera_w2c = False
 
     # Interactive Rendering
     while True:
+        cam_params = view_control.convert_to_pinhole_camera_parameters()
+        view_k = cam_params.intrinsic.intrinsic_matrix
+        k = view_k / cfg['view_scale']
+        k[2, 2] = 1
+        w2c = cam_params.extrinsic
+
         # Check for commands from Tkinter
         while not command_queue.empty():
             msg = command_queue.get()
+            print(msg)
             if msg['type'] == Operation.SWITCH_MODE:
                 render_mode = msg['payload']['mode']
             elif load_semantics and msg['type'] == Operation.APPLY_MASK:
@@ -236,12 +399,25 @@ def visualize(scene_path, cfg):
                 else:
                     to_keep = msg['payload']['to_keep']
                     render_mask[semantic_ids.squeeze() == input_semantic_id] = bool(to_keep)
-
-        cam_params = view_control.convert_to_pinhole_camera_parameters()
-        view_k = cam_params.intrinsic.intrinsic_matrix
-        k = view_k / cfg['view_scale']
-        k[2, 2] = 1
-        w2c = cam_params.extrinsic
+            elif msg['type'] == Operation.CAM_TRANS:
+                set_camera_w2c = True
+                if msg['payload']['direction'] == 'X':
+                    w2c = move_camera_x(w2c, msg['payload']['factor'] * delta_trans)
+                elif msg['payload']['direction'] == 'Y':
+                    w2c = move_camera_y(w2c, msg['payload']['factor'] * delta_trans)
+                elif msg['payload']['direction'] == 'Z':
+                    w2c = move_camera_z(w2c, msg['payload']['factor'] * delta_trans)
+            elif msg['type'] == Operation.CAM_ROTATE:
+                set_camera_w2c = True
+                if msg['payload']['direction'] == 'X':
+                    w2c = rotate_camera_x(w2c, msg['payload']['factor'] * delta_rotate)
+                elif msg['payload']['direction'] == 'Y':
+                    w2c = rotate_camera_y(w2c, msg['payload']['factor'] * delta_rotate)
+                elif msg['payload']['direction'] == 'Z':
+                    w2c = rotate_camera_z(w2c, msg['payload']['factor'] * delta_rotate))
+        
+        y_limit = scene_data['means3D'][:, 1] >= -1.35 # -1.05
+        render_mask = render_mask & y_limit
 
         if render_mode == 'centers':
             pts = o3d.utility.Vector3dVector(scene_data['means3D'][render_mask].contiguous().double().cpu().numpy())
@@ -263,6 +439,12 @@ def visualize(scene_path, cfg):
         if not vis.poll_events():
             break
         vis.update_renderer()
+
+        if set_camera_w2c:
+            cam_params.extrinsic = w2c
+            print_camera_pose(w2c)
+            view_control.convert_from_pinhole_camera_parameters(cam_params, allow_arbitrary=True)
+            set_camera_w2c = False
 
     # Cleanup
     vis.destroy_window()
@@ -291,6 +473,8 @@ if __name__ == "__main__":
         scene_path = os.path.join(results_dir, "params.npz")
     else:
         scene_path = experiment.config["scene_path"]
+
+    print(scene_path)
     viz_cfg = experiment.config["viz"]
 
     # Start the Open3D visualizer in a separate thread
