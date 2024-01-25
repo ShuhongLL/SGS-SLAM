@@ -7,7 +7,7 @@ scenes = ["room0", "room1", "room2",
 
 primary_device="cuda:0"
 seed = 0
-scene_name = "office0"
+scene_name = "office3"
 
 map_every = 1
 keyframe_every = 5
@@ -15,7 +15,7 @@ mapping_window_size = 24
 tracking_iters = 40
 mapping_iters = 60
 
-group_name = "Replica_track"
+group_name = "Replica"
 run_name = f"{scene_name}_{seed}"
 
 config = dict(
@@ -33,8 +33,8 @@ config = dict(
     report_iter_progress=False,
     load_checkpoint=False,
     checkpoint_time_idx=0,
-    save_checkpoints=False, # Save Checkpoints
-    checkpoint_interval=100, # Checkpoint Interval
+    save_checkpoints=True, # Save Checkpoints
+    checkpoint_interval=500, # Checkpoint Interval
     use_wandb=True,
     wandb=dict(
         entity="nanspter",
@@ -54,7 +54,7 @@ config = dict(
         end=-1,
         stride=1,
         num_frames=-1,
-        load_semantics=True,
+        load_semantics=False,
         num_semantic_classes=101
     ),
     tracking=dict(
@@ -68,7 +68,7 @@ config = dict(
         loss_weights=dict(
             im=0.5,
             depth=1.0,
-            seg=0.1 # 0.1
+            seg=0 # 0.1
         ),
         lrs=dict(
             means3D=0.0,
@@ -91,7 +91,7 @@ config = dict(
         loss_weights=dict(
             im=0.5,
             depth=1.0,
-            seg=0.1
+            seg=0
         ),
         lrs=dict(
             means3D=0.0001,

@@ -2,11 +2,11 @@ from os.path import join as p_join
 
 primary_device = "cuda:1"
 seed = 0
-group_name = "Replica_origin_postopt"
-scene_name = "office2"
-param_name = f"{scene_name}_{seed}"
+group_name = "Replica_postopt"
+scene_name = "room0"
+param_name = f"{scene_name}_{seed}_semantic"
 run_name = f"postopt_{param_name}"
-param_ckpt_path = f"./experiments/Replica_origin/{param_name}/params.npz"
+param_ckpt_path = f"./experiments/Replica/{param_name}/params.npz"
 
 config = dict(
     workdir=f"./experiments/{group_name}",
@@ -28,17 +28,17 @@ config = dict(
         basedir="./data/Replica",
         gradslam_data_cfg="./configs/data/replica.yaml",
         sequence=scene_name,
-        desired_image_height=480,
-        desired_image_width=640,
+        desired_image_height=680,
+        desired_image_width=1200,
         start=0,
         end=-1,
-        stride=9,
+        stride=20,
         num_frames=100,
-        eval_stride=3,
-        eval_num_frames=300,
+        eval_stride=5,
+        eval_num_frames=400,
         param_ckpt_path=param_ckpt_path,
-        load_semantics=False,
-        num_semantic_classes=49
+        load_semantics=True,
+        num_semantic_classes=101
     ),
     train=dict(
         num_iters_mapping=15000,
@@ -47,7 +47,7 @@ config = dict(
         loss_weights=dict(
             im=0.5,
             depth=1.0,
-            seg=0, #0.10,
+            seg=0.1, #0.10,
         ),
         lrs_mapping=dict(
             means3D=0.00032,

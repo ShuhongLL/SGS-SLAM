@@ -6,8 +6,8 @@ primary_device = "cuda:0"
 scenes = ["scene0000_00", "scene0059_00", "scene0106_00", 
           "scene0169_00", "scene0181_00", "scene0207_00"]
 
-seed = int(6)
-scene_name = scenes[int(6)]
+seed = 0
+scene_name = "scene0000_00"
 
 map_every = 1
 keyframe_every = 5
@@ -16,7 +16,7 @@ tracking_iters = 100
 mapping_iters = 30
 scene_radius_depth_ratio = 3
 
-group_name = "ScanNet"
+group_name = "ScanNet_origin"
 run_name = f"{scene_name}_seed{seed}"
 
 config = dict(
@@ -55,6 +55,8 @@ config = dict(
         end=-1,
         stride=1,
         num_frames=-1,
+        load_semantics=False,
+        num_semantic_classes=101
     ),
     tracking=dict(
         use_gt_poses=False, # Use GT Poses for Tracking

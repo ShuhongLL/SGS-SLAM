@@ -47,10 +47,11 @@ class ScannetDataset(GradSLAMDataset):
         color_paths = natsorted(glob.glob(f"{self.input_folder}/color/*.jpg"))
         depth_paths = natsorted(glob.glob(f"{self.input_folder}/depth/*.png"))
         semantic_paths = None
+        semantic_id_paths = None
         embedding_paths = None
         if self.load_embeddings:
             embedding_paths = natsorted(glob.glob(f"{self.input_folder}/{self.embedding_dir}/*.pt"))
-        return color_paths, depth_paths, semantic_paths, embedding_paths
+        return color_paths, depth_paths, semantic_id_paths, semantic_paths, embedding_paths
 
     def load_poses(self):
         poses = []
