@@ -84,6 +84,78 @@ def recolor_semantic_img(rendered_seg, gt_seg, color_map=None):
     
     return rendered_seg
 
+def evaluate_label_miou(pred_label, gt_label):
+    """
+    Input : 
+        pred_label: torch tensor of the predicted semantic label, shape (1, H, W)
+        gt_label: torch tensor of the semantic label, shape (1, H, W)
+    """
+    gt_flat = gt_label.view(-1)
+    pred_flat = pred_label.view(-1)
+
+    unique_labels = torch.unique(gt_flat)
+    iou_per_label = []
+
+    for label in unique_labels:
+        # Skip unlabeled class if necessary (e.g., label == 0)
+        if label == 0:
+            continue
+
+        gt_label = (gt_flat == label)
+        pred_label = (pred_flat == label)
+        intersection = torch.logical_and(gt_label, pred_label).sum().item()
+        union = torch.logical_or(gt_label, pred_label).sum().item()
+
+        if union == 0:
+            continue
+
+        iou = intersection / union
+        iou_per_label.append(iou)
+
+    # Mean IoU
+    miou = sum(iou_per_label) / len(iou_per_label) if iou_per_label else 0
+    return miou
+
+
+def evaluate_miou(recolored_img, gt_img):
+    """
+    Input : 
+        recolored_img: torch tensor of the colored semantic image, shape (C, H, W)
+        gt_img: torch tensor of the colored semantic image, shape (C, H, W)
+    """
+    gt_flat = gt_img.permute(1, 2, 0).view(-1, 3)
+    pred_flat = recolored_img.permute(1, 2, 0).view(-1, 3)
+
+    # Filter out [0, 0, 0] (unlabeled) pixels
+    labeled_pixels = (gt_flat != torch.tensor([0, 0, 0], dtype=torch.uint8).cuda()).any(dim=1)
+    gt_flat = gt_flat[labeled_pixels]
+    pred_flat = pred_flat[labeled_pixels]
+
+    unique_colors = torch.unique(gt_flat, dim=0)
+    iou_per_color = []
+
+    for color in unique_colors:
+        # Skip the unlabeled color
+        if torch.equal(color, torch.tensor([0, 0, 0], dtype=torch.uint8).cuda()):
+            continue
+
+        gt_matches = torch.all(gt_flat == color, dim=1)
+        pred_matches = torch.all(pred_flat == color, dim=1)
+
+        # Calculate intersection and union
+        intersection = torch.logical_and(gt_matches, pred_matches).sum().item()
+        union = torch.logical_or(gt_matches, pred_matches).sum().item()
+
+        if union == 0:
+            continue
+
+        iou = intersection / union
+        iou_per_color.append(iou)
+
+    # Calculate mean IoU
+    miou = sum(iou_per_color) / len(iou_per_color) if iou_per_color else 0
+    return miou
+
 
 def evaluate_miou(recolored_img, gt_img):
     # Background is represented by 0
@@ -728,12 +800,14 @@ def eval(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_iters,
     avg_ssim = ssim_list.mean()
     avg_lpips = lpips_list.mean()
     avg_miou = miou_list.mean() if miou_list.size > 0 else 0
+    avg_miou_stride10 = miou_list[::10].mean() if miou_list.size > 0 else 0
     print("Average PSNR: {:.2f}".format(avg_psnr))
     print("Average Depth RMSE: {:.2f} cm".format(avg_rmse*100))
     print("Average Depth L1: {:.2f} cm".format(avg_l1*100))
     print("Average MS-SSIM: {:.3f}".format(avg_ssim))
     print("Average LPIPS: {:.3f}".format(avg_lpips))
     print("Average mIoU: {:.4f}".format(avg_miou))
+    print("Average mIoU (stride 10): {:.4f}".format(avg_miou_stride10))
 
     if wandb_run is not None:
         wandb_run.log({"Final Stats/Average PSNR": avg_psnr,
@@ -742,7 +816,8 @@ def eval(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_iters,
                         "Final Stats/Average MS-SSIM": avg_ssim,
                         "Final Stats/Average LPIPS": avg_lpips,
                         "Final Stats/step": 1,
-                        "Final Stats/Average mIoU": avg_miou})
+                        "Final Stats/Average mIoU": avg_miou,
+                        "Final Stats/Average mIoU (stride 10)": avg_miou_stride10})
 
     # Save metric lists as text files
     np.savetxt(os.path.join(eval_dir, "psnr.txt"), psnr_list)

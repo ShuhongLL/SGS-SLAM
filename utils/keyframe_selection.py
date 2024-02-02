@@ -90,6 +90,20 @@ def keyframe_selection_overlap(gt_depth, w2c, intrinsics, keyframe_list, k, devi
         # Select the keyframes with percentage of points inside the image > 0
         selected_keyframe_list = [keyframe_dict['id']
                                   for keyframe_dict in list_keyframe if keyframe_dict['percent_inside'] > 0.0]
+        
+        # if keyframe_miou_threshold > 0:
+        #     selected_keyframe_list = []
+        #     for frame_idx in keyframe_candidates:
+        #         keyframe_semantic_id = keyframe_list[frame_idx]['semantic_id']
+        #         curr_semantic_id = curr_data['semantic_id']
+        #         label_miou = evaluate_label_miou(keyframe_semantic_id, curr_semantic_id)
+        #         if label_miou < keyframe_miou_threshold:
+        #             selected_keyframe_list.append(frame_idx)
+        #         if len(selected_keyframe_list) >= k:
+        #             break
+        # else:
+        #     selected_keyframe_list = keyframe_candidates[:k]
+
         selected_keyframe_list = list(np.random.permutation(
             np.array(selected_keyframe_list))[:k])
 

@@ -3,6 +3,7 @@ import os
 import shutil
 import sys
 import time
+import pandas as pd
 from importlib.machinery import SourceFileLoader
 
 _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -663,6 +664,7 @@ def rgbd_slam(config: dict):
     # Initialize list to keep track of Keyframes
     keyframe_list = []
     keyframe_time_indices = []
+    timestamp_keyframes = []
     
     # Init Variables to keep track of ground truth poses and runtimes
     gt_w2c_all_frames = []
@@ -919,6 +921,7 @@ def rgbd_slam(config: dict):
                 selected_keyframes.append(-1)
                 # Print the selected keyframes
                 print(f"\nSelected Keyframes at Frame {time_idx}: {selected_time_idx}")
+                timestamp_keyframes.append(selected_time_idx)
 
             # Reset Optimizer & Learning Rates for Full Map Optimization
             optimizer = initialize_optimizer(params, params_opt_exclude, config['mapping']['lrs'], tracking=False) 
@@ -1049,6 +1052,15 @@ def rgbd_slam(config: dict):
             wandb_time_step += 1
 
         torch.cuda.empty_cache()
+
+    if config['save_timestamp_keyframes']:
+        # Save keyframes selected at each timestamp
+        max_length = max(len(inner) for inner in timestamp_keyframes)
+        # Insert -1 for placeholder
+        timestamp_keyframes_df = pd.DataFrame([inner + [-1 for _ in range(max_length - len(inner))] \
+                                               for inner in timestamp_keyframes])
+        timestamp_keyframes_df.to_csv(os.path.join(eval_dir, f"timestamp_keyframes.csv"), \
+                                      index=False, header=False, na_rep='-1')
 
     # Compute Average Runtimes
     if tracking_iter_time_count == 0:
