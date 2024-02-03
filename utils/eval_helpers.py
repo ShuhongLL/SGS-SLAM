@@ -84,6 +84,7 @@ def recolor_semantic_img(rendered_seg, gt_seg, color_map=None):
     
     return rendered_seg
 
+
 def evaluate_label_miou(pred_label, gt_label):
     """
     Input : 
@@ -154,18 +155,6 @@ def evaluate_miou(recolored_img, gt_img):
 
     # Calculate mean IoU
     miou = sum(iou_per_color) / len(iou_per_color) if iou_per_color else 0
-    return miou
-
-
-def evaluate_miou(recolored_img, gt_img):
-    # Background is represented by 0
-    non_zero = torch.logical_and(gt_img != 0, recolored_img != 0)
-    intersection = torch.sum(torch.logical_and(non_zero, recolored_img == gt_img))
-    union = torch.sum(non_zero)
-
-    if union == 0:
-        return 0
-    miou = intersection / union
     return miou
 
 
@@ -517,7 +506,7 @@ def eval_online(dataset, all_params, num_frames, eval_online_dir, sil_thres, map
             # Calcualte mIoU scores
             rastered_seg = recolor_semantic_img(rastered_seg, gt_seg)
             miou = evaluate_miou(rastered_seg, gt_seg)
-            miou_list.append(miou.cpu().numpy())
+            miou_list.append(miou)
         else:
             rastered_seg = None
             gt_seg = None
@@ -714,7 +703,7 @@ def eval(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_iters,
             # Calcualte mIoU scores
             rastered_seg = recolor_semantic_img(rastered_seg, gt_seg)
             miou = evaluate_miou(rastered_seg, gt_seg)
-            miou_list.append(miou.cpu().numpy())
+            miou_list.append(miou)
         else:
             rastered_seg = None
             gt_seg = None
@@ -995,7 +984,7 @@ def eval_nvs(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_ite
             # Calcualte mIoU scores
             rastered_seg = recolor_semantic_img(rastered_seg, gt_seg)
             miou = evaluate_miou(rastered_seg, gt_seg)
-            miou_list.append(miou.cpu().numpy())
+            miou_list.append(miou)
         else:
             rastered_seg = None
             gt_seg = None

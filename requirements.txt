@@ -6,6 +6,7 @@ matplotlib
 kornia
 natsort
 pyyaml
+pandas
 wandb
 lpips
 open3d==0.16.0
