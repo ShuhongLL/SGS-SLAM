@@ -7,7 +7,7 @@ scenes = ["scene0000_00", "scene0059_00", "scene0106_00",
           "scene0169_00", "scene0181_00", "scene0207_00"]
 
 seed = 0
-scene_name = "scene0000_00"
+scene_name = "scene0207_00"
 
 map_every = 1
 keyframe_every = 5
@@ -16,7 +16,7 @@ tracking_iters = 100
 mapping_iters = 30
 scene_radius_depth_ratio = 3
 
-group_name = "ScanNet_origin"
+group_name = "ScanNet"
 run_name = f"{scene_name}_seed{seed}"
 
 config = dict(
@@ -28,14 +28,15 @@ config = dict(
     keyframe_every=keyframe_every, # Keyframe every nth frame
     mapping_window_size=mapping_window_size, # Mapping window size
     report_global_progress_every=500, # Report Global Progress every nth frame
-    eval_every=500, # Evaluate every nth frame (at end of SLAM)
+    eval_every=5, # Evaluate every nth frame (at end of SLAM)
     scene_radius_depth_ratio=scene_radius_depth_ratio, # Max First Frame Depth to Scene Radius Ratio (For Pruning/Densification)
     mean_sq_dist_method="projective", # ["projective", "knn"] (Type of Mean Squared Distance Calculation for Scale of Gaussians)
     report_iter_progress=False,
     load_checkpoint=False,
     checkpoint_time_idx=0,
     save_checkpoints=False, # Save Checkpoints
-    checkpoint_interval=100, # Checkpoint Interval
+    save_timestamp_keyframes=False, # Save keyframes for each timestamp
+    checkpoint_interval=500, # Checkpoint Interval
     use_wandb=True,
     wandb=dict(
         entity="nanspter",
@@ -55,8 +56,8 @@ config = dict(
         end=-1,
         stride=1,
         num_frames=-1,
-        load_semantics=False,
-        num_semantic_classes=101
+        load_semantics=True,
+        num_semantic_classes=48,
     ),
     tracking=dict(
         use_gt_poses=False, # Use GT Poses for Tracking
@@ -72,6 +73,7 @@ config = dict(
         loss_weights=dict(
             im=0.5,
             depth=1.0,
+            seg=0, # 0.1
         ),
         lrs=dict(
             means3D=0.0,
@@ -81,6 +83,7 @@ config = dict(
             log_scales=0.0,
             cam_unnorm_rots=0.0005,
             cam_trans=0.0005,
+            semantic_colors=0.0,
         ),
     ),
     mapping=dict(
@@ -96,6 +99,7 @@ config = dict(
         loss_weights=dict(
             im=0.5,
             depth=1.0,
+            seg=0.1, # 0.1
         ),
         lrs=dict(
             means3D=0.0001,
@@ -105,6 +109,7 @@ config = dict(
             log_scales=0.001,
             cam_unnorm_rots=0.0000,
             cam_trans=0.0000,
+            semantic_colors=0.0025,
         ),
         prune_gaussians=True, # Prune Gaussians during Mapping
         pruning_dict=dict( # Needs to be updated based on the number of mapping iterations

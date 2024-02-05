@@ -282,7 +282,7 @@ class GradSLAMDataset(torch.utils.data.Dataset):
             - semantic_labels: :math:`(H_\text{old}, W_\text{old})`
             - Output: :math:`(H, W, 1)` if `self.channels_first == False`, else :math:`(1, H, W)`.
         """
-        semantic_labels = cv2.resize(
+        semantic_ids = cv2.resize(
             semantic_ids,
             (self.desired_width, self.desired_height),
             interpolation=cv2.INTER_NEAREST,
@@ -368,7 +368,7 @@ class GradSLAMDataset(torch.utils.data.Dataset):
         # load and preprocess semantic labels.
         if self.load_semantics:
             semantic_id_path = self.semantic_id_paths[index]
-            semantic_id = np.asarray(imageio.imread(semantic_id_path), dtype=np.int8)
+            semantic_id = np.asarray(imageio.imread(semantic_id_path), dtype=np.int64)
             semantic_id = self._preprocess_semantic_id(semantic_id)
             semantic_id = torch.from_numpy(semantic_id)
 

@@ -46,8 +46,8 @@ class ScannetDataset(GradSLAMDataset):
     def get_filepaths(self):
         color_paths = natsorted(glob.glob(f"{self.input_folder}/color/*.jpg"))
         depth_paths = natsorted(glob.glob(f"{self.input_folder}/depth/*.png"))
-        semantic_paths = None
-        semantic_id_paths = None
+        semantic_paths = natsorted(glob.glob(f"{self.input_folder}/semantic_color/*.png"))
+        semantic_id_paths = natsorted(glob.glob(f"{self.input_folder}/semantic_id/*.png"))
         embedding_paths = None
         if self.load_embeddings:
             embedding_paths = natsorted(glob.glob(f"{self.input_folder}/{self.embedding_dir}/*.pt"))
