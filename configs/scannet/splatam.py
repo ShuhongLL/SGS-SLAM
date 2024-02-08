@@ -7,7 +7,7 @@ scenes = ["scene0000_00", "scene0059_00", "scene0106_00",
           "scene0169_00", "scene0181_00", "scene0207_00"]
 
 seed = 0
-scene_name = "scene0207_00"
+scene_name = "scene0000_00"
 
 map_every = 1
 keyframe_every = 5
@@ -16,7 +16,7 @@ tracking_iters = 100
 mapping_iters = 30
 scene_radius_depth_ratio = 3
 
-group_name = "ScanNet"
+group_name = "ScanNet_0000"
 run_name = f"{scene_name}_seed{seed}"
 
 config = dict(
