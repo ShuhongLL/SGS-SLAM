@@ -414,7 +414,7 @@ def visualize(scene_path, cfg):
                 elif msg['payload']['direction'] == 'Y':
                     w2c = rotate_camera_y(w2c, msg['payload']['factor'] * delta_rotate)
                 elif msg['payload']['direction'] == 'Z':
-                    w2c = rotate_camera_z(w2c, msg['payload']['factor'] * delta_rotate))
+                    w2c = rotate_camera_z(w2c, msg['payload']['factor'] * delta_rotate)
         
         y_limit = scene_data['means3D'][:, 1] >= -1.35 # -1.05
         render_mask = render_mask & y_limit

@@ -7,7 +7,7 @@ scenes = ["scene0000_00", "scene0059_00", "scene0106_00",
           "scene0169_00", "scene0181_00", "scene0207_00"]
 
 seed = 0
-scene_name = "scene0000_00"
+scene_name = "scene0059_00"
 
 map_every = 1
 keyframe_every = 5
@@ -16,7 +16,7 @@ tracking_iters = 100
 mapping_iters = 30
 scene_radius_depth_ratio = 3
 
-group_name = "ScanNet_0000"
+group_name = "ScanNet"
 run_name = f"{scene_name}_seed{seed}"
 
 config = dict(
@@ -136,14 +136,16 @@ config = dict(
         ),
     ),
     viz=dict(
-        render_mode='color', # ['color', 'depth' or 'centers']
+        render_mode='color', # ['color', 'depth', 'centers', 'semantic_color']
         offset_first_viz_cam=True, # Offsets the view camera back by 0.5 units along the view direction (For Final Recon Viz)
         show_sil=False, # Show Silhouette instead of RGB
-        visualize_cams=True, # Visualize Camera Frustums and Trajectory
+        visualize_cams=False, # Visualize Camera Frustums and Trajectory
         viz_w=600, viz_h=340,
         viz_near=0.01, viz_far=100.0,
         view_scale=2,
         viz_fps=5, # FPS for Online Recon Viz
         enter_interactive_post_online=True, # Enter Interactive Mode after Online Recon Viz
+        scene_name = scene_name,
+        load_semantics=True,
     ),
 )
