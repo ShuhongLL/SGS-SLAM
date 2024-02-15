@@ -336,7 +336,6 @@ def get_loss(params, curr_data, variables, iter_time_idx, loss_weights, use_sil_
             losses['seg'] = 0.8 * l1_loss_v1(rendered_seg, curr_data['semantic_color']) \
                 + 0.2 * (1.0 - calc_ssim(rendered_seg, curr_data['semantic_color']))
 
-    # TODO :: modify the plt
     # Visualize the Diff Images
     if tracking and visualize_tracking_loss:
         fig, ax = plt.subplots(2, 4, figsize=(12, 6))

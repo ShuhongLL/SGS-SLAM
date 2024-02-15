@@ -8,21 +8,21 @@ scenes = ["8b5caf3398", "b20a261fdf"]
 seed = 0
 
 # Export SCENE env variable before running
-os.environ["SCENE"] = "0"
+# os.environ["SCENE"] = "0"
 
-# Train Split Eval
-use_train_split = True
+use_train_split = False
+nvs_eval = False
 
-# # Novel View Synthesis Eval
-# use_train_split = False
+# Novel View Synthesis Eval
+# use_train_split = True
+# nvs_eval = True
 
-if use_train_split:
-    scene_num_frames = [-1, 360]
-else:
-    scene_num_frames = [-1, -1]
+# if use_train_split:
+#     scene_num_frames = [-1, 360]
+# else:
+#     scene_num_frames = [-1, -1]
 
-scene_name = scenes[int(os.environ["SCENE"])]
-num_frames = scene_num_frames[int(os.environ["SCENE"])]
+scene_name = "8b5caf3398"
 
 map_every = 1
 keyframe_every = 5
@@ -30,7 +30,7 @@ mapping_window_size = 24
 tracking_iters = 200
 mapping_iters = 60
 
-group_name = "ScanNet++"
+group_name = "ScanNet++_origin"
 run_name = f"{scene_name}_{seed}"
 
 config = dict(
@@ -48,8 +48,9 @@ config = dict(
     report_iter_progress=False,
     load_checkpoint=False,
     checkpoint_time_idx=0,
-    save_checkpoints=False, # Save Checkpoints
-    checkpoint_interval=5, # Checkpoint Interval
+    save_checkpoints=True, # Save Checkpoints
+    checkpoint_interval=90, # Checkpoint Interval
+    save_timestamp_keyframes=False,
     use_wandb=False,
     wandb=dict(
         entity="nanspter",
@@ -61,7 +62,7 @@ config = dict(
     ),
     data=dict(
         dataset_name="scannetpp",
-        basedir="./data/ScanNet++/data",
+        basedir="./data/scannetpp",
         sequence=scene_name,
         ignore_bad=False,
         use_train_split=True,
@@ -70,7 +71,9 @@ config = dict(
         start=0,
         end=-1,
         stride=1,
-        num_frames=num_frames,
+        num_frames=-1,
+        load_semantics=False,
+        num_semantic_classes=101
     ),
     tracking=dict(
         use_gt_poses=False, # Use GT Poses for Tracking
@@ -89,6 +92,7 @@ config = dict(
         loss_weights=dict(
             im=0.5,
             depth=1.0,
+            seg=0, # 0.1
         ),
         lrs=dict(
             means3D=0.0,
@@ -98,6 +102,7 @@ config = dict(
             log_scales=0.0,
             cam_unnorm_rots=0.001,
             cam_trans=0.004,
+            semantic_colors=0.0,
         ),
     ),
     mapping=dict(
@@ -113,6 +118,7 @@ config = dict(
         loss_weights=dict(
             im=0.5,
             depth=1.0,
+            seg=0.2,
         ),
         lrs=dict(
             means3D=0.0001,
@@ -122,6 +128,7 @@ config = dict(
             log_scales=0.001,
             cam_unnorm_rots=0.0000,
             cam_trans=0.0000,
+            semantic_colors=0.0025,
         ),
         prune_gaussians=True, # Prune Gaussians during Mapping
         pruning_dict=dict( # Needs to be updated based on the number of mapping iterations
@@ -148,7 +155,7 @@ config = dict(
         ),
     ),
     viz=dict(
-        render_mode='color', # ['color', 'depth' or 'centers']
+        render_mode='color', # ['color', 'depth', 'centers', 'semantic_color']
         offset_first_viz_cam=True, # Offsets the view camera back by 0.5 units along the view direction (For Final Recon Viz)
         show_sil=False, # Show Silhouette instead of RGB
         visualize_cams=True, # Visualize Camera Frustums and Trajectory
@@ -157,5 +164,7 @@ config = dict(
         view_scale=2,
         viz_fps=5, # FPS for Online Recon Viz
         enter_interactive_post_online=True, # Enter Interactive Mode after Online Recon Viz
+        scene_name = scene_name,
+        load_semantics=False, # Whether load semantic information
     ),
 )

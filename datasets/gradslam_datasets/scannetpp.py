@@ -22,6 +22,7 @@ class ScannetPPDataset(GradSLAMDataset):
         sequence,
         ignore_bad: Optional[bool] = False,
         use_train_split: Optional[bool] = True,
+        nvs_eval: Optional[bool] = False,
         stride: Optional[int] = None,
         start: Optional[int] = 0,
         end: Optional[int] = -1,
@@ -39,14 +40,21 @@ class ScannetPPDataset(GradSLAMDataset):
         self.pose_path = None
         self.ignore_bad = ignore_bad
         self.use_train_split = use_train_split
+        self.load_semantics = load_semantics
+        self.nvs_eval = nvs_eval
 
         # Load Train & Test Split
         self.train_test_split = json.load(open(f"{self.input_folder}/dslr/train_test_lists.json", "r"))
-        if self.use_train_split:
+        # Load training data only
+        if self.use_train_split and not self.nvs_eval:
             self.image_names = self.train_test_split["train"]
-        else:
+        # Load testing data only
+        elif self.use_train_split and self.nvs_eval:
             self.image_names = self.train_test_split["test"]
             self.train_image_names = self.train_test_split["train"]
+        # Use all data
+        else:
+            self.image_names = self.train_test_split["train"] + self.train_test_split["test"]
         
         # Load NeRFStudio format camera & poses data
         self.cams_metadata = self.load_cams_metadata()
@@ -92,6 +100,8 @@ class ScannetPPDataset(GradSLAMDataset):
         base_path = f"{self.input_folder}/dslr"
         color_paths = []
         depth_paths = []
+        semantic_id_paths = []
+        semantic_color_paths = []
         self.tmp_poses = []
         P = torch.tensor(
             [
@@ -101,15 +111,20 @@ class ScannetPPDataset(GradSLAMDataset):
                 [0, 0, 0, 1]
             ]
         ).float()
-        if not self.use_train_split:
+        if self.use_train_split and self.nvs_eval:
             self.first_train_image_name = self.train_image_names[0]
             self.first_train_image_index = self.train_filepath_index_mapping.get(self.first_train_image_name)
             self.first_train_frame_metadata = self.train_frames_metadata[self.first_train_image_index]
-            # Get path of undistorted image and depth
+            # Get path of undistorted image, depth, semantics
             color_path = f"{base_path}/undistorted_images/{self.first_train_image_name}"
             depth_path = f"{base_path}/undistorted_depths/{self.first_train_image_name.replace('.JPG', '.png')}"
             color_paths.append(color_path)
             depth_paths.append(depth_path)
+            if self.load_semantics:
+                semantic_id_path = f"{base_path}/undistorted_semantic_id/{self.first_train_image_name.replace('.JPG', '.png')}"
+                semantic_color_path = f"{base_path}/undistorted_semantic_color/{self.first_train_image_name.replace('.JPG', '.png')}"
+                semantic_id_paths.append(semantic_id_path)
+                semantic_color_paths.append(semantic_color_path)
             # Get pose of first train frame in GradSLAM format
             c2w = torch.from_numpy(np.array(self.first_train_frame_metadata["transform_matrix"])).float()
             _pose = P @ c2w @ P.T
@@ -125,15 +140,19 @@ class ScannetPPDataset(GradSLAMDataset):
             depth_path = f"{base_path}/undistorted_depths/{image_name.replace('.JPG', '.png')}"
             color_paths.append(color_path)
             depth_paths.append(depth_path)
+            if self.load_semantics:
+                semantic_id_path = f"{base_path}/undistorted_semantic_id/{image_name.replace('.JPG', '.png')}"
+                semantic_color_path = f"{base_path}/undistorted_semantic_color/{image_name.replace('.JPG', '.png')}"
+                semantic_id_paths.append(semantic_id_path)
+                semantic_color_paths.append(semantic_color_path)
             # Get pose of undistorted image in GradSLAM format
             c2w = torch.from_numpy(np.array(frame_metadata["transform_matrix"])).float()
             _pose = P @ c2w @ P.T
             self.tmp_poses.append(_pose)
-        semantic_paths = None
         embedding_paths = None
         if self.load_embeddings:
             embedding_paths = natsorted(glob.glob(f"{base_path}/{self.embedding_dir}/*.pt"))
-        return color_paths, depth_paths, semantic_paths, embedding_paths
+        return color_paths, depth_paths, semantic_id_paths, semantic_color_paths, embedding_paths
 
     def load_poses(self):
         return self.tmp_poses
