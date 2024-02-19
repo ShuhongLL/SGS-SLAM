@@ -170,3 +170,4 @@ test.ipynb
 .vscode
 
 logs/
+gen_figures/

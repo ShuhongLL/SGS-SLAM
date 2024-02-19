@@ -558,7 +558,7 @@ def eval(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_iters, 
             # Calcualte mIoU scores
             rastered_seg = recolor_semantic_img(rastered_seg, gt_seg)
             miou = evaluate_miou(rastered_seg, gt_seg)
-            miou_list.append(miou.cpu().numpy())
+            miou_list.append(miou)
         else:
             rastered_seg = None
             gt_seg = None

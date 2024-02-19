@@ -1,12 +1,15 @@
 from os.path import join as p_join
 
+scenes = ["8b5caf3398", "b20a261fdf"]
+
 primary_device = "cuda:1"
 seed = 0
-group_name = "Replica_postopt"
-scene_name = "room1"
-param_name = f"{scene_name}_{seed}_semantic"
+group_name = "ScanNet++_postopt"
+scene_name = "8b5caf3398"
+param_name = f"{scene_name}_{seed}"
 run_name = f"postopt_{param_name}"
-param_ckpt_path = f"./experiments/Replica/{param_name}/params.npz"
+param_ckpt_path = f"./experiments/ScanNet++/{param_name}/params.npz"
+use_train_split = True
 
 config = dict(
     workdir=f"./experiments/{group_name}",
@@ -25,17 +28,19 @@ config = dict(
         eval_save_qual=True,
     ),
     data=dict(
-        basedir="./data/Replica",
-        gradslam_data_cfg="./configs/data/replica.yaml",
+        dataset_name="scannetpp",
+        basedir="./data/scannetpp",
         sequence=scene_name,
-        desired_image_height=680,
-        desired_image_width=1200,
+        ignore_bad=False,
+        use_train_split=use_train_split,
+        desired_image_height=584,
+        desired_image_width=876,
         start=0,
         end=-1,
-        stride=20,
-        num_frames=100,
+        stride=1,
         eval_stride=5,
-        eval_num_frames=400,
+        eval_num_frames=55,
+        num_frames=-1,
         param_ckpt_path=param_ckpt_path,
         load_semantics=True,
         num_semantic_classes=101
@@ -86,7 +91,7 @@ config = dict(
         viz_fps=5, # FPS for Online Recon Viz
         enter_interactive_post_online=True, # Enter Interactive Mode after Online Recon Viz
         scene_name = scene_name,
-        color_dict_path="./data/Replica/color_dict.json",
+        # color_dict_path="./data/Replica/color_dict.json",
         load_semantics=True, # Whether load semantic information
     ),
 )

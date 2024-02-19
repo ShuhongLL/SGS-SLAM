@@ -95,13 +95,16 @@ if __name__=="__main__":
     experiment = SourceFileLoader(
         os.path.basename(args.experiment), args.experiment
     ).load_module()
-
+    
     config = experiment.config
     params_opt_exclude = set()
 
     # Set Experiment Seed
     seed_everything(seed=experiment.config['seed'])
     device = torch.device(config["primary_device"])
+    if experiment.config["primary_device"].startswith("cuda:"):
+        device_id = int(experiment.config["primary_device"].split(':')[1])
+        torch.cuda.set_device(device_id)
 
     # Create Results Directory and Copy Config
     results_dir = os.path.join(
@@ -110,6 +113,14 @@ if __name__=="__main__":
     if not experiment.config['load_checkpoint']:
         os.makedirs(results_dir, exist_ok=True)
         shutil.copy(args.experiment, os.path.join(results_dir, "config.py"))
+
+    if "scene_path" not in experiment.config:
+        results_dir = os.path.join(
+            experiment.config["workdir"], experiment.config["run_name"]
+        )
+        scene_path = os.path.join(results_dir, "params.npz")
+    else:
+        scene_path = experiment.config["scene_path"]
 
     # Load Dataset
     print("Loading Dataset ...")
@@ -152,11 +163,10 @@ if __name__=="__main__":
     if num_frames == -1:
         num_frames = len(dataset)
 
-    scene_path = config['scene_path']
     params = load_scene_data(scene_path, params_opt_exclude)
     
-    if load_semantics:
-        params = filter_semantic_params(params, to_remove_ids=[14])
+    # if load_semantics:
+    #     params = filter_semantic_params(params, to_remove_ids=[14])
 
     if dataset_config['use_train_split']:
         eval_dir = os.path.join(results_dir, "eval_train")
@@ -183,21 +193,21 @@ if __name__=="__main__":
                 eval(dataset, params, num_frames, eval_dir, sil_thres=config['mapping']['sil_thres'],
                     wandb_run=wandb_run, wandb_save_qual=config['wandb']['eval_save_qual'],
                     mapping_iters=config['mapping']['num_iters'], add_new_gaussians=config['mapping']['add_new_gaussians'],
-                    eval_every=config['eval_every'], save_frames=True)
+                    load_semantics=load_semantics, eval_every=config['eval_every'], save_frames=True)
             else:
                 eval_nvs(dataset, params, num_frames, eval_dir, sil_thres=config['mapping']['sil_thres'],
                     wandb_run=wandb_run, wandb_save_qual=config['wandb']['eval_save_qual'],
                     mapping_iters=config['mapping']['num_iters'], add_new_gaussians=config['mapping']['add_new_gaussians'],
-                    eval_every=config['eval_every'], save_frames=True)
+                    load_semantics=load_semantics, eval_every=config['eval_every'], save_frames=True)
         else:
             if dataset_config['use_train_split']:
                 eval(dataset, params, num_frames, eval_dir, sil_thres=config['mapping']['sil_thres'],
                     mapping_iters=config['mapping']['num_iters'], add_new_gaussians=config['mapping']['add_new_gaussians'],
-                    eval_every=config['eval_every'], save_frames=True)
+                    load_semantics=load_semantics, eval_every=config['eval_every'], save_frames=True)
             else:
                 eval_nvs(dataset, params, num_frames, eval_dir, sil_thres=config['mapping']['sil_thres'],
                     mapping_iters=config['mapping']['num_iters'], add_new_gaussians=config['mapping']['add_new_gaussians'],
-                    eval_every=config['eval_every'], save_frames=True)
+                    load_semantics=load_semantics, eval_every=config['eval_every'], save_frames=True)
     
     # Close WandB
     if config['use_wandb']:

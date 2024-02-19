@@ -22,7 +22,6 @@ class ScannetPPDataset(GradSLAMDataset):
         sequence,
         ignore_bad: Optional[bool] = False,
         use_train_split: Optional[bool] = True,
-        nvs_eval: Optional[bool] = False,
         stride: Optional[int] = None,
         start: Optional[int] = 0,
         end: Optional[int] = -1,
@@ -41,20 +40,15 @@ class ScannetPPDataset(GradSLAMDataset):
         self.ignore_bad = ignore_bad
         self.use_train_split = use_train_split
         self.load_semantics = load_semantics
-        self.nvs_eval = nvs_eval
 
         # Load Train & Test Split
         self.train_test_split = json.load(open(f"{self.input_folder}/dslr/train_test_lists.json", "r"))
         # Load training data only
-        if self.use_train_split and not self.nvs_eval:
+        if self.use_train_split:
             self.image_names = self.train_test_split["train"]
-        # Load testing data only
-        elif self.use_train_split and self.nvs_eval:
+        else:
             self.image_names = self.train_test_split["test"]
             self.train_image_names = self.train_test_split["train"]
-        # Use all data
-        else:
-            self.image_names = self.train_test_split["train"] + self.train_test_split["test"]
         
         # Load NeRFStudio format camera & poses data
         self.cams_metadata = self.load_cams_metadata()
@@ -111,7 +105,7 @@ class ScannetPPDataset(GradSLAMDataset):
                 [0, 0, 0, 1]
             ]
         ).float()
-        if self.use_train_split and self.nvs_eval:
+        if not self.use_train_split:
             self.first_train_image_name = self.train_image_names[0]
             self.first_train_image_index = self.train_filepath_index_mapping.get(self.first_train_image_name)
             self.first_train_frame_metadata = self.train_frames_metadata[self.first_train_image_index]

@@ -1,7 +1,7 @@
 import os
 from os.path import join as p_join
 
-primary_device = "cuda:0"
+primary_device = "cuda:1"
 
 scenes = ["8b5caf3398", "b20a261fdf"]
 
@@ -11,16 +11,14 @@ seed = 0
 # os.environ["SCENE"] = "0"
 
 use_train_split = False
-nvs_eval = False
 
 # Novel View Synthesis Eval
-# use_train_split = True
-# nvs_eval = True
+# use_train_split = False
 
-# if use_train_split:
-#     scene_num_frames = [-1, 360]
-# else:
-#     scene_num_frames = [-1, -1]
+if use_train_split:
+    scene_num_frames = [-1, 360]
+else:
+    scene_num_frames = [-1, -1]
 
 scene_name = "8b5caf3398"
 
@@ -30,7 +28,7 @@ mapping_window_size = 24
 tracking_iters = 200
 mapping_iters = 60
 
-group_name = "ScanNet++_origin"
+group_name = "ScanNet++"
 run_name = f"{scene_name}_{seed}"
 
 config = dict(
@@ -65,14 +63,14 @@ config = dict(
         basedir="./data/scannetpp",
         sequence=scene_name,
         ignore_bad=False,
-        use_train_split=True,
+        use_train_split=use_train_split,
         desired_image_height=584,
         desired_image_width=876,
         start=0,
         end=-1,
         stride=1,
         num_frames=-1,
-        load_semantics=False,
+        load_semantics=True,
         num_semantic_classes=101
     ),
     tracking=dict(
@@ -118,7 +116,7 @@ config = dict(
         loss_weights=dict(
             im=0.5,
             depth=1.0,
-            seg=0.2,
+            seg=0.1,
         ),
         lrs=dict(
             means3D=0.0001,
@@ -165,6 +163,6 @@ config = dict(
         viz_fps=5, # FPS for Online Recon Viz
         enter_interactive_post_online=True, # Enter Interactive Mode after Online Recon Viz
         scene_name = scene_name,
-        load_semantics=False, # Whether load semantic information
+        load_semantics=True, # Whether load semantic information
     ),
 )
