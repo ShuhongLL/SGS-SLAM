@@ -1106,6 +1106,9 @@ def rgbd_slam(config: dict):
         params['gt_w2c_all_frames'].append(gt_w2c_tensor.detach().cpu().numpy())
     params['gt_w2c_all_frames'] = np.stack(params['gt_w2c_all_frames'], axis=0)
     params['keyframe_time_indices'] = np.array(keyframe_time_indices)
+
+    if load_semantics:
+        params['semantic_ids'] = params['semantic_ids'].astype(np.uint8)
     
     # Save Parameters
     save_params(params, output_dir)

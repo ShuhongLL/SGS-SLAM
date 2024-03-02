@@ -211,6 +211,45 @@ def rotate_camera_horizon(theta, view_w2c):
     return view_w2c
 
 
+def rotate_object_around_z(object_points, angle_increment_degrees, current_angle_degrees=0):
+    """
+    Rotate object points around the Z-axis by a given angle increment.
+
+    Parameters:
+    - object_points: numpy array of shape (n, 3) representing the object points in camera coordinates.
+    - angle_increment_degrees: float, the angle by which to rotate the object in degrees.
+    - current_angle_degrees: float, the current rotation angle of the object in degrees.
+
+    Returns:
+    - rotated_points: numpy array of shape (n, 3) of the rotated object points.
+    - new_angle_degrees: float, the new rotation angle after applying the increment.
+    """
+    # Convert angle to radians
+    angle_radians = np.radians(angle_increment_degrees + current_angle_degrees)
+    
+    # Rotation matrix around the Z-axis
+    Rz = np.array([[np.cos(angle_radians), -np.sin(angle_radians), 0],
+                   [np.sin(angle_radians), np.cos(angle_radians), 0],
+                   [0, 0, 1]])
+    
+    # Compute the center of the object
+    object_center = np.mean(object_points, axis=0)
+    
+    # Translate points to the origin (center at origin)
+    points_centered = object_points - object_center
+    
+    # Apply the rotation
+    points_rotated = np.dot(points_centered, Rz.T)  # Using transpose of Rz for correct matrix multiplication
+    
+    # Translate points back
+    rotated_points = points_rotated + object_center
+    
+    # Update the current angle
+    new_angle_degrees = (current_angle_degrees + angle_increment_degrees) % 360
+    
+    return rotated_points, new_angle_degrees
+
+
 def visualize(scene_path, cfg):
     # Load Scene Data
     w2c, k = load_camera(cfg, scene_path)
