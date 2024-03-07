@@ -69,7 +69,7 @@ def load_scene_data(scene_path):
     return params, all_w2cs
 
 
-def get_rendervars(params, w2c, curr_timestep):
+def get_rendervars(params, w2c, curr_timestep, load_semantics=False):
     params_timesteps = params['timestep']
     selected_params_idx = params_timesteps <= curr_timestep
     keys = [k for k in params.keys() if
@@ -97,7 +97,20 @@ def get_rendervars(params, w2c, curr_timestep):
         'scales': torch.exp(torch.tile(selected_params['log_scales'], (1, 3))),
         'means2D': torch.zeros_like(selected_params['means3D'], device="cuda")
     }
-    return rendervar, depth_rendervar
+
+    if load_semantics:
+        semantic_rendervar = {
+            'means3D': transformed_pts,
+            'colors_precomp': selected_params['semantic_colors'],
+            'rotations': torch.nn.functional.normalize(selected_params['unnorm_rotations']),
+            'opacities': torch.sigmoid(selected_params['logit_opacities']),
+            'scales': torch.exp(torch.tile(selected_params['log_scales'], (1, 3))),
+            'means2D': torch.zeros_like(selected_params['means3D'], device="cuda")
+        }
+    else:
+        semantic_rendervar = None
+
+    return rendervar, depth_rendervar, semantic_rendervar
 
 
 def make_lineset(all_pts, all_cols, num_lines):
@@ -113,7 +126,7 @@ def make_lineset(all_pts, all_cols, num_lines):
     return linesets
 
 
-def render(w2c, k, timestep_data, timestep_depth_data, cfg, device="cuda"):
+def render(w2c, k, timestep_data, timestep_depth_data, cfg, device="cuda", load_semantics=False):
     with torch.no_grad():
         cam = setup_camera(cfg['viz_w'], cfg['viz_h'], k, w2c, cfg['viz_near'],
                            cfg['viz_far'], device=device)
@@ -176,6 +189,7 @@ def rgbd2pcd(color, depth, w2c, intrinsics, cfg):
     else:
         cols = torch.permute(color, (1, 2, 0)).reshape(-1, 3)
         cols = o3d.utility.Vector3dVector(cols.contiguous().double().cpu().numpy())
+
     return pts, cols
 
 
@@ -190,7 +204,10 @@ def visualize(scene_path, cfg):
                       height=int(cfg['viz_h'] * cfg['view_scale']),
                       visible=True)
 
-    scene_data, scene_depth_data = get_rendervars(params, first_frame_w2c, curr_timestep=0)
+    load_semantics = cfg['load_semantics']
+    scene_data, scene_depth_data, scene_semantic_data = get_rendervars(params, first_frame_w2c,
+                                                                       curr_timestep=0,
+                                                                       load_semantics=load_semantics)
     im, depth, sil = render(first_frame_w2c, k, scene_data, scene_depth_data, cfg)
     init_pts, init_cols = rgbd2pcd(im, depth, first_frame_w2c, k, cfg)
     pcd = o3d.geometry.PointCloud()
@@ -200,12 +217,12 @@ def visualize(scene_path, cfg):
 
     w = cfg['viz_w']
     h = cfg['viz_h']
-
+    
     # Initialize Estimated Camera Frustums
     frustum_size = 0.045
     num_t = len(all_w2cs)
     cam_centers = []
-    cam_colormap = plt.get_cmap('cool')
+    cam_colormap = plt.get_cmap('autumn')
     norm_factor = 0.5
     total_num_lines = num_t - 1
     line_colormap = plt.get_cmap('cool')
@@ -279,13 +296,21 @@ def visualize(scene_path, cfg):
         k[2, 2] = 1
         view_w2c = cam_params.extrinsic
         view_w2c = np.dot(first_view_w2c, all_w2cs[curr_timestep])
+        view_w2c[0:3, 3] += [0, 0, 0.5]
         cam_params.extrinsic = view_w2c
         view_control.convert_from_pinhole_camera_parameters(cam_params, allow_arbitrary=True)
 
-        scene_data, scene_depth_data = get_rendervars(params, view_w2c, curr_timestep=curr_timestep)
+        scene_data, scene_depth_data, scene_semantic_data = get_rendervars(params, view_w2c,
+                                                                           curr_timestep=curr_timestep,
+                                                                           load_semantics=load_semantics)
         if cfg['render_mode'] == 'centers':
             pts = o3d.utility.Vector3dVector(scene_data['means3D'].contiguous().double().cpu().numpy())
             cols = o3d.utility.Vector3dVector(scene_data['colors_precomp'].contiguous().double().cpu().numpy())
+        elif cfg['render_mode'] == 'semantic_color':
+            seg, depth, sil = render(view_w2c, k, scene_semantic_data, scene_depth_data, cfg)
+            if cfg['show_sil']:
+                seg = (1-sil).repeat(3, 1, 1)
+            pts, cols = rgbd2pcd(seg, depth, view_w2c, k, cfg)
         else:
             im, depth, sil = render(view_w2c, k, scene_data, scene_depth_data, cfg)
             if cfg['show_sil']:
@@ -314,6 +339,11 @@ def visualize(scene_path, cfg):
         if cfg['render_mode'] == 'centers':
             pts = o3d.utility.Vector3dVector(scene_data['means3D'].contiguous().double().cpu().numpy())
             cols = o3d.utility.Vector3dVector(scene_data['colors_precomp'].contiguous().double().cpu().numpy())
+        elif cfg['render_mode'] == 'semantic_color':
+            seg, depth, sil = render(w2c, k, scene_data, scene_semantic_data, cfg)
+            if cfg['show_sil']:
+                seg = (1-sil).repeat(3, 1, 1)
+            pts, cols = rgbd2pcd(seg, depth, w2c, k, cfg)
         else:
             im, depth, sil = render(w2c, k, scene_data, scene_depth_data, cfg)
             if cfg['show_sil']:

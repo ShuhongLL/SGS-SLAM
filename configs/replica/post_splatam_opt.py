@@ -1,9 +1,9 @@
 from os.path import join as p_join
 
-primary_device = "cuda:1"
+primary_device = "cuda:0"
 seed = 0
 group_name = "Replica_postopt"
-scene_name = "room1"
+scene_name = "office4"
 param_name = f"{scene_name}_{seed}_semantic"
 run_name = f"postopt_{param_name}"
 param_ckpt_path = f"./experiments/Replica/{param_name}/params.npz"
@@ -76,11 +76,11 @@ config = dict(
         ),
     ),
     viz=dict(
-        render_mode='color', # ['color', 'depth' or 'centers']
+        render_mode='semantic_color', # ['color', 'depth', 'centers' or 'semantic_color']
         offset_first_viz_cam=True, # Offsets the view camera back by 0.5 units along the view direction (For Final Recon Viz)
         show_sil=False, # Show Silhouette instead of RGB
         visualize_cams=True, # Visualize Camera Frustums and Trajectory
-        viz_w=600, viz_h=340,
+        viz_w=840, viz_h=476,
         viz_near=0.01, viz_far=100.0,
         view_scale=2,
         viz_fps=5, # FPS for Online Recon Viz
