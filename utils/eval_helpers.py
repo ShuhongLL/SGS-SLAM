@@ -596,10 +596,14 @@ def eval(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_iters,
         os.makedirs(render_rgb_dir, exist_ok=True)
         render_depth_dir = os.path.join(eval_dir, "rendered_depth")
         os.makedirs(render_depth_dir, exist_ok=True)
-        rgb_dir = os.path.join(eval_dir, "rgb")
-        os.makedirs(rgb_dir, exist_ok=True)
-        depth_dir = os.path.join(eval_dir, "depth")
-        os.makedirs(depth_dir, exist_ok=True)
+        # rgb_dir = os.path.join(eval_dir, "rgb")
+        # os.makedirs(rgb_dir, exist_ok=True)
+        # depth_dir = os.path.join(eval_dir, "depth")
+        # os.makedirs(depth_dir, exist_ok=True)
+        
+        if load_semantics:
+            render_seg_dir = os.path.join(eval_dir, "rendered_seg")
+            os.makedirs(render_seg_dir, exist_ok=True)
 
     gt_w2c_list = []
     for time_idx in tqdm(range(num_frames)):
@@ -720,14 +724,10 @@ def eval(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_iters,
             cv2.imwrite(os.path.join(render_rgb_dir, "gs_{:04d}.png".format(time_idx)), cv2.cvtColor(viz_render_im*255, cv2.COLOR_RGB2BGR))
             cv2.imwrite(os.path.join(render_depth_dir, "gs_{:04d}.png".format(time_idx)), depth_colormap)
 
-            # Save GT RGB and Depth
-            viz_gt_im = torch.clamp(curr_data['im'], 0, 1)
-            viz_gt_im = viz_gt_im.detach().cpu().permute(1, 2, 0).numpy()
-            viz_gt_depth = curr_data['depth'][0].detach().cpu().numpy()
-            normalized_depth = np.clip((viz_gt_depth - vmin) / (vmax - vmin), 0, 1)
-            depth_colormap = cv2.applyColorMap((normalized_depth * 255).astype(np.uint8), cv2.COLORMAP_JET)
-            cv2.imwrite(os.path.join(rgb_dir, "gt_{:04d}.png".format(time_idx)), cv2.cvtColor(viz_gt_im*255, cv2.COLOR_RGB2BGR))
-            cv2.imwrite(os.path.join(depth_dir, "gt_{:04d}.png".format(time_idx)), depth_colormap)
+            if load_semantics:
+                viz_render_seg = torch.clamp(rastered_seg, 0, 1)
+                viz_render_seg = viz_render_seg.detach().cpu().permute(1, 2, 0).numpy()
+                cv2.imwrite(os.path.join(render_seg_dir, "gs_{:04d}.png".format(time_idx)), cv2.cvtColor(viz_render_seg*255, cv2.COLOR_RGB2BGR))
         
         # Plot the Ground Truth and Rasterized RGB & Depth, along with Silhouette
         fig_title = "Time Step: {}".format(time_idx)
@@ -861,10 +861,10 @@ def eval_nvs(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_ite
         os.makedirs(render_rgb_dir, exist_ok=True)
         render_depth_dir = os.path.join(eval_dir, "rendered_depth")
         os.makedirs(render_depth_dir, exist_ok=True)
-        rgb_dir = os.path.join(eval_dir, "rgb")
-        os.makedirs(rgb_dir, exist_ok=True)
-        depth_dir = os.path.join(eval_dir, "depth")
-        os.makedirs(depth_dir, exist_ok=True)
+        # rgb_dir = os.path.join(eval_dir, "rgb")
+        # os.makedirs(rgb_dir, exist_ok=True)
+        # depth_dir = os.path.join(eval_dir, "depth")
+        # os.makedirs(depth_dir, exist_ok=True)
 
         if load_semantics:
             render_seg_dir = os.path.join(eval_dir, "rendered_semantic")
@@ -1002,22 +1002,22 @@ def eval_nvs(dataset, final_params, num_frames, eval_dir, sil_thres, mapping_ite
             cv2.imwrite(os.path.join(render_depth_dir, "splatam_{:04d}.png".format(test_time_idx)), depth_colormap)
 
             # Save GT RGB and Depth
-            viz_gt_im = torch.clamp(curr_data['im'], 0, 1)
-            viz_gt_im = viz_gt_im.detach().cpu().permute(1, 2, 0).numpy()
-            viz_gt_depth = curr_data['depth'][0].detach().cpu().numpy()
-            normalized_depth = np.clip((viz_gt_depth - vmin) / (vmax - vmin), 0, 1)
-            depth_colormap = cv2.applyColorMap((normalized_depth * 255).astype(np.uint8), cv2.COLORMAP_JET)
-            cv2.imwrite(os.path.join(rgb_dir, "gt_{:04d}.png".format(test_time_idx)), cv2.cvtColor(viz_gt_im*255, cv2.COLOR_RGB2BGR))
-            cv2.imwrite(os.path.join(depth_dir, "gt_{:04d}.png".format(test_time_idx)), depth_colormap)
+            # viz_gt_im = torch.clamp(curr_data['im'], 0, 1)
+            # viz_gt_im = viz_gt_im.detach().cpu().permute(1, 2, 0).numpy()
+            # viz_gt_depth = curr_data['depth'][0].detach().cpu().numpy()
+            # normalized_depth = np.clip((viz_gt_depth - vmin) / (vmax - vmin), 0, 1)
+            # depth_colormap = cv2.applyColorMap((normalized_depth * 255).astype(np.uint8), cv2.COLORMAP_JET)
+            # cv2.imwrite(os.path.join(rgb_dir, "gt_{:04d}.png".format(test_time_idx)), cv2.cvtColor(viz_gt_im*255, cv2.COLOR_RGB2BGR))
+            # cv2.imwrite(os.path.join(depth_dir, "gt_{:04d}.png".format(test_time_idx)), depth_colormap)
 
             if load_semantics:
                 viz_render_seg = torch.clamp(rastered_seg, 0, 1)
                 viz_render_seg = viz_render_seg.detach().cpu().permute(1, 2, 0).numpy()
                 cv2.imwrite(os.path.join(render_seg_dir, "splatam_{:04d}.png".format(test_time_idx)), cv2.cvtColor(viz_render_seg*255, cv2.COLOR_RGB2BGR))
                 # Save GT
-                viz_gt_seg = torch.clamp(gt_seg, 0, 1)
-                viz_gt_seg = viz_gt_seg.detach().cpu().permute(1, 2, 0).numpy()
-                cv2.imwrite(os.path.join(seg_dir, "gt_{:04d}.png".format(test_time_idx)), cv2.cvtColor(viz_gt_seg*255, cv2.COLOR_RGB2BGR))
+                # viz_gt_seg = torch.clamp(gt_seg, 0, 1)
+                # viz_gt_seg = viz_gt_seg.detach().cpu().permute(1, 2, 0).numpy()
+                # cv2.imwrite(os.path.join(seg_dir, "gt_{:04d}.png".format(test_time_idx)), cv2.cvtColor(viz_gt_seg*255, cv2.COLOR_RGB2BGR))
         
         # Plot the Ground Truth and Rasterized RGB & Depth, along with Silhouette
         fig_title = "Time Step: {}".format(test_time_idx)

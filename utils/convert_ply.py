@@ -17,10 +17,13 @@ def construct_list_of_attributes(f_dc, scale, rotation):
     return l
 
 
-def convert(params, dest):
+def convert(params, dest, is_semantic=False):
     xyz = params['means3D']
     normals = np.zeros_like(xyz)
-    f_dc =  (params['rgb_colors'] - 0.5) / C0
+    if not is_semantic:
+        f_dc =  (params['rgb_colors'] - 0.5) / C0
+    else:
+        f_dc =  (params['semantic_colors'] - 0.5) / C0
     f_rest = np.zeros_like(f_dc)
     opacities = params['logit_opacities']
     scale = params['log_scales'].repeat(3, axis=-1)

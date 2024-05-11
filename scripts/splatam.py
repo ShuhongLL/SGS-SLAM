@@ -1089,11 +1089,11 @@ def rgbd_slam(config: dict):
             eval(dataset, params, num_frames, eval_dir, sil_thres=config['mapping']['sil_thres'],
                  wandb_run=wandb_run, wandb_save_qual=config['wandb']['eval_save_qual'],
                  mapping_iters=config['mapping']['num_iters'], add_new_gaussians=config['mapping']['add_new_gaussians'],
-                 device=device, load_semantics=load_semantics, eval_every=config['eval_every'])
+                 device=device, load_semantics=load_semantics, eval_every=config['eval_every'], save_frames=True)
         else:
             eval(dataset, params, num_frames, eval_dir, sil_thres=config['mapping']['sil_thres'],
                  mapping_iters=config['mapping']['num_iters'], add_new_gaussians=config['mapping']['add_new_gaussians'],
-                 device=device, load_semantics=load_semantics, eval_every=config['eval_every'])
+                 device=device, load_semantics=load_semantics, eval_every=config['eval_every'], save_frames=True)
 
     # Add Camera Parameters to Save them
     params['timestep'] = variables['timestep']

@@ -3,7 +3,7 @@ import os
 import numpy as np
 import random
 import torch
-from convert_ply import convert
+from utils.convert_ply import convert
 
 
 def seed_everything(seed=42):
@@ -40,8 +40,8 @@ def save_params(output_params, output_dir, save_ply=True):
     os.makedirs(output_dir, exist_ok=True)
     print(f"Saving parameters to: {output_dir}")
     if save_ply:
-        save_path = os.path.join(output_dir, "params.ply")
-        convert(output_params, save_path)
+        convert(to_save, os.path.join(output_dir, "params.ply"), is_semantic=False)
+        convert(to_save, os.path.join(output_dir, "seg_params.ply"), is_semantic=True)
     else:
         save_path = os.path.join(output_dir, "params.npz")
         np.savez(save_path, **to_save)
