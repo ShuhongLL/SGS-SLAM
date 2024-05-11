@@ -17,9 +17,7 @@ def construct_list_of_attributes(f_dc, scale, rotation):
     return l
 
 
-def convert(src, dest):
-    params = np.load(src)
-
+def convert(params, dest):
     xyz = params['means3D']
     normals = np.zeros_like(xyz)
     f_dc =  (params['rgb_colors'] - 0.5) / C0
@@ -42,4 +40,5 @@ if __name__ == '__main__':
     parser.add_argument("--src", type=str, required=True, help="Path to experiment npz file")
     parser.add_argument("--dest", type=str, required=True, help="Path to output ply file")
     args = parser.parse_args()
-    convert(args.src, args.dest)
+    params = np.load(args.src)
+    convert(params, args.dest)

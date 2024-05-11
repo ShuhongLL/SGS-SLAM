@@ -3,6 +3,7 @@ import os
 import numpy as np
 import random
 import torch
+from convert_ply import convert
 
 
 def seed_everything(seed=42):
@@ -32,14 +33,18 @@ def params2cpu(params):
     return res
 
 
-def save_params(output_params, output_dir):
+def save_params(output_params, output_dir, save_ply=True):
     # Convert to CPU Numpy Arrays
     to_save = params2cpu(output_params)
     # Save the Parameters containing the Gaussian Trajectories
     os.makedirs(output_dir, exist_ok=True)
     print(f"Saving parameters to: {output_dir}")
-    save_path = os.path.join(output_dir, "params.npz")
-    np.savez(save_path, **to_save)
+    if save_ply:
+        save_path = os.path.join(output_dir, "params.ply")
+        convert(output_params, save_path)
+    else:
+        save_path = os.path.join(output_dir, "params.npz")
+        np.savez(save_path, **to_save)
 
 
 def save_params_ckpt(output_params, output_dir, time_idx):
