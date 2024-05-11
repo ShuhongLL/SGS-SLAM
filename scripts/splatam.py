@@ -1108,7 +1108,7 @@ def rgbd_slam(config: dict):
     params['keyframe_time_indices'] = np.array(keyframe_time_indices)
 
     if load_semantics:
-        params['semantic_ids'] = params['semantic_ids'].astype(np.uint8)
+        params['semantic_ids'] = params['semantic_ids'].type(torch.uint8)
     
     # Save Parameters
     save_params(params, output_dir)
