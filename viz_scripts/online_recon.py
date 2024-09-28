@@ -297,6 +297,7 @@ def visualize(scene_path, cfg):
         view_w2c = cam_params.extrinsic
         view_w2c = np.dot(first_view_w2c, all_w2cs[curr_timestep])
         view_w2c[0:3, 3] += [0, 0, 0.5]
+
         cam_params.extrinsic = view_w2c
         view_control.convert_from_pinhole_camera_parameters(cam_params, allow_arbitrary=True)
 

@@ -18,6 +18,38 @@ currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentfram
 parentdir = os.path.dirname(currentdir)
 sys.path.insert(0,parentdir)
 
+simplified_nyu40 = {
+    "wall": [174, 199, 232],
+    "floor": [152, 223, 138],
+    "cabinet": [31, 119, 180],
+    "bed": [255, 187, 120], # <-
+    "chair": [188, 189, 34],
+    "sofa": [140, 86, 75], # <-
+    "table": [255, 152, 150],
+    "door": [214, 39, 40],
+    "window": [197, 176, 213],
+    "bookshelf": [148, 103, 189], # <-
+    "picture": [196, 156, 148],
+    "counter": [23, 190, 207], # <-
+    "desk": [247, 182, 210], # <-
+    "curtain": [219, 219, 141],
+    "refrigerator": [255, 127, 14],
+    "showercurtain": [158, 218, 229],
+    "toilet": [44, 160, 44],
+    "sink": [112, 128, 144],
+    "bathtub": [227, 119, 194],
+    # "otherfurniture": [82, 84, 163],
+    "guitar": [255, 0, 0],
+    "bicycle": [0, 255, 0],
+    "basket": [255, 255, 0], # <-
+    "whiteboard": [255, 0, 255],
+    "backpack": [0, 255, 255], # <-
+    "microwave": [128, 0, 128],
+    "bag": [255, 165, 0],
+    "stool": [],
+    "pillow": []
+}
+
 
 nyu40_class2rgb = {
     "unlabeled": [0, 0, 0],

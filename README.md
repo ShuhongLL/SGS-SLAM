@@ -2,54 +2,45 @@
 
 <p align="center">
 
-  <h1 align="center">SplaTAM: Splat, Track & Map 3D Gaussians for Dense RGB-D SLAM</h1>
+  <h1 align="center">SGS-SLAM: Semantic Gaussian Splatting For Neural Dense SLAM</h1>
+  <h3 align="center">ECCV 2024</h3>
   <p align="center">
-    <a href="https://nik-v9.github.io/"><strong>Nikhil Keetha</strong></a>
-    ·
-    <a href="https://jaykarhade.github.io/"><strong>Jay Karhade</strong></a>
-    ·
-    <a href="https://krrish94.github.io/"><strong>Krishna Murthy Jatavallabhula</strong></a>
-    ·
-    <a href="https://gengshan-y.github.io/"><strong>Gengshan Yang</strong></a>
-    ·
-    <a href="https://theairlab.org/team/sebastian/"><strong>Sebastian Scherer</strong></a>
-    <br>
-    <a href="https://www.cs.cmu.edu/~deva/"><strong>Deva Ramanan</strong></a>
-    ·
-    <a href="https://www.vision.rwth-aachen.de/person/216/"><strong>Jonathon Luiten</strong></a>
+    Mingrui Li*, Shuhong Liu*, Heng Zhou, Guohao Zhu, Na Cheng, Tianchen Deng, Hongyu Wang
   </p>
-  <h3 align="center"><a href="">Paper</a> | <a href="">Video</a> | <a href="https://spla-tam.github.io/">Project Page</a></h3>
+  <p align="center">
+    (*equal contribution)
+  </p>
+  <h3 align="center"><a href="https://arxiv.org/pdf/2402.03246">Paper</a> | <a href="https://www.youtube.com/watch?v=y83yw1E-oUo">Video</a> | <a href="https://www.dropbox.com/scl/fo/a93xhcpsteumsmw8oq4jc/ALD5oq6MfkKTpT_7K5cDqhQ?rlkey=hblzvi1m9pcqmksgzs9ydwdxp&st=uvjz1fec&dl=0">Replica Dataset</a>
   <div align="center"></div>
 </p>
 
 <p align="center">
   <a href="">
-    <img src="./assets/1.gif" alt="Logo" width="100%">
+    <img src="./assets/demo.gif" alt="Logo" width="100%">
   </a>
 </p>
 
 <br>
 
-## Coming Soon: Stay Tuned for Faster, Better and Stronger SplaTAM V2 Update!  
-
+## Table of Contents
 <!-- TABLE OF CONTENTS -->
 <details open="open" style='padding: 10px; border-radius:5px 30px 30px 5px; border-style: solid; border-width: 1px;'>
-  <summary>Table of Contents</summary>
+  <summary>Overview</summary>
   <ol>
+    <li>
+      <a href="#abstract">Abtract</a>
+    </li>
     <li>
       <a href="#installation">Installation</a>
     </li>
     <li>
-      <a href="#demo">Online Demo</a>
+      <a href="#download-dataset">Download Dataset</a>
     </li>
     <li>
       <a href="#usage">Usage</a>
     </li>
     <li>
-      <a href="#downloads">Downloads</a>
-    </li>
-    <li>
-      <a href="#benchmarking">Benchmarking</a>
+      <a href="#logging">Logging</a>
     </li>
     <li>
       <a href="#acknowledgement">Acknowledgement</a>
@@ -57,152 +48,45 @@
     <li>
       <a href="#citation">Citation</a>
     </li>
-    <li>
-      <a href="#developers">Developers</a>
-    </li>
   </ol>
 </details>
 
+## Abstract
+
+We present SGS-SLAM, the first semantic visual SLAM system based on [3D Gaussian Splatting](https://github.com/graphdeco-inria/gaussian-splatting). It incorporates appearance, geometry, and semantic features through multi-channel optimization, addressing the oversmoothing limitations of neural implicit SLAM systems in high-quality rendering, scene understanding, and object-level geometry. We introduce a unique semantic feature loss that effectively compensates for the shortcomings of traditional depth and color losses in object optimization. Through a semantic-guided keyframe selection strategy, we prevent erroneous reconstructions caused by cumulative errors. Extensive experiments demonstrate that SGS-SLAM delivers state-of-the-art performance in camera pose estimation, map reconstruction, precise semantic segmentation, and object-level geometric accuracy, while ensuring real-time rendering capabilities.
+
+<p align="center">
+  <a href="">
+    <img src="./assets/abstract.png" alt="Logo" width="100%">
+  </a>
+</p>
+
 ## Installation
 
-##### (Recommended)
-SplaTAM has been tested on python 3.10, CUDA>=11.6. The simplest way to install all dependences is to use [anaconda](https://www.anaconda.com/) and [pip](https://pypi.org/project/pip/) in the following steps: 
-
 ```bash
-conda create -n splatam python=3.10
-conda activate splatam
+conda create -n sgs-slam python=3.10
+conda activate sgs-slam
 conda install -c "nvidia/label/cuda-11.6.0" cuda-toolkit
 conda install pytorch==1.12.1 torchvision==0.13.1 torchaudio==0.12.1 cudatoolkit=11.6 -c pytorch -c conda-forge
 pip install -r requirements.txt
 ```
 
-Alternatively, we also provide a conda environment.yml file :
-```bash
-conda env create -f environment.yml
-conda activate splatam
-```
+## Download Dataset
 
-#### Docker and Singularity Setup
-
-We also provide a docker image. We recommend using a venv to run the code inside a docker image:
-
-
-```bash
-docker pull nkeetha/splatam:v1
-bash bash_scripts/docker_start.bash
-cd /SplaTAM/
-pip install virtualenv --user
-mkdir venv
-cd venv
-virtualenv splatam --system-site-packages
-pip install -r venv_requirements.txt
-```
-
-Setting up a singularity container is similar:
-```bash
-cd </path/to/singularity/folder/
-singularity pull splatam.sif docker://nkeetha/splatam:v1
-singularity instance start --nv splatam.sif splatam
-singularity run --nv instance://gradslam_2
-cd <path/to/SplaTAM/>
-pip install virtualenv --user
-mkdir venv
-cd venv
-virtualenv splatam --system-site-packages
-pip install -r venv_requirements.txt
-```
-
-## Demo
-
-### Online
-
-You can SplaTAM your own environment with an iPhone or LiDAR-equipped Apple device by downloading and using the <a href="https://apps.apple.com/au/app/nerfcapture/id6446518379">NeRFCapture</a> app.
-
-Make sure that your iPhone and PC are connected to the same WiFi network, and then run the following command:
-
- ```bash
-bash bash_scripts/online_demo.bash configs/iphone/online_demo.py
-```
-
-On the app, keep clicking send for successive frames. Once the capturing of frames is done, the app will disconnect from the PC and check out SplaTAM's interactive rendering of the reconstruction on your PC! Here are some cool example results:
-
-<p align="center">
-  <a href="">
-    <img src="./assets/collage.gif" alt="Logo" width="75%">
-  </a>
-</p>
-
-### Offline
-
-You can also first capture the dataset and then run SplaTAM offline on the dataset with the following command:
-
-```bash
-bash bash_scripts/nerfcapture.bash configs/iphone/nerfcapture.py
-```
-
-### Dataset Collection
-
-If you would like to only capture your own iPhone dataset using the NeRFCapture app, please use the following command:
-
-```bash
-bash bash_scripts/nerfcapture2dataset.bash configs/iphone/dataset.py
-```
-
-## Usage
-
-We will use the iPhone dataset as an example to show how to use SplaTAM. The following steps are similar for other datasets.
-
-To run SplaTAM, please use the following command:
-
-```bash
-python scripts/splatam.py configs/iphone/splatam.py
-```
-
-To visualize the final interactive SplaTAM reconstruction, please use the following command:
-
-```bash
-python viz_scripts/final_recon.py configs/iphone/splatam.py
-```
-
-To visualize the SplaTAM reconstruction in an online fashion, please use the following command:
-
-```bash
-python viz_scripts/online_recon.py configs/iphone/splatam.py
-```
-
-To run 3D Gaussian Splatting on the SplaTAM reconstruction, please use the following command:
-
-```bash
-python scripts/post_splatam_opt.pt configs/iphone/post_splatam_opt.py
-```
-
-To run 3D Gaussian Splatting on a dataset using ground truth poses, please use the following command:
-
-```bash
-python scripts/gaussian_splatting.py configs/iphone/gaussian_splatting.py
-```
-
-## Downloads
-
-DATAROOT is `./data` by default. Please change the `input_folder` path in the scene-specific config files if datasets are stored somewhere else on your machine.
+DATAROOT is `./data` by default. Please change the `input_folder` path in the scene-specific config files if datasets are stored elsewhere.
 
 ### Replica
 
-Download the data as below, and the data is saved into the `./data/Replica` folder. Note that the Replica data is generated by the authors of iMAP (but hosted by the authors of NICE-SLAM). Please cite iMAP if you use the data.
+You can download the Replica dataset with ground-truth semantic masks from [this link](https://www.dropbox.com/scl/fo/a93xhcpsteumsmw8oq4jc/ALD5oq6MfkKTpT_7K5cDqhQ?rlkey=hblzvi1m9pcqmksgzs9ydwdxp&st=uvjz1fec&dl=0). The original Replica scenes, created by the Meta research team, are accessible through their [official repository](https://github.com/facebookresearch/Replica-Dataset). By accessing the dataset via the provided link, you consent to the terms of the license. The ground-truth semantic masks were generated using the preprocessing procedure of [Semantic-NeRF](https://github.com/Harry-Zhi/semantic_nerf). Additionally, the camera trajectories in the dataset were captured using iMAP.
 
-```bash
-bash bash_scripts/download_replica.sh
-```
-
-### TUM-RGBD
-
-```bash
-bash bash_scripts/download_tum.sh
-```
 
 ### ScanNet
 
-Please follow the data downloading procedure on the [ScanNet](http://www.scan-net.org/) website, and extract color/depth frames from the `.sens` file using this [code](https://github.com/ScanNet/ScanNet/blob/master/SensReader/python/reader.py).
+Please follow the data downloading procedure on the [ScanNet](http://www.scan-net.org/) website, and extract color/depth/semantic frames from the `.sens` file using the following preprocessing step:
+
+```bash
+python preprocess/scannet/run.py --input_folder [input path] --output_folder [output path] --export_depth_images --export_color_images --export_poses --export_intrinsics --export_seg --label_map_file preprocess/scannet/scannetv2-labels.combined.tsv
+```
 
 <details>
   <summary>[Directory structure of ScanNet (click to expand)]</summary>
@@ -232,7 +116,7 @@ Please follow the data downloading procedure on the [ScanNet](http://www.scan-ne
 </details>
 
 
-We use the following sequences: 
+We use the following sequences following the previous studies: 
 ```
 scene0000_00
 scene0059_00
@@ -244,124 +128,77 @@ scene0207_00
 ### ScanNet++
 
 Please follow the data downloading and image undistortion procedure on the <a href="https://kaldir.vc.in.tum.de/scannetpp/">ScanNet++</a> website. 
-Additionally for undistorting the DSLR depth images, we use our <a href="https://github.com/Nik-V9/scannetpp">own variant of the official ScanNet++ processing code</a>. We will open a pull request to the official ScanNet++ repository soon.
 
-We use the following sequences: 
+We use the following sequences following [SplaTAM](https://github.com/spla-tam/SplaTAM): 
 
 ```
 8b5caf3398
 b20a261fdf
 ```
 
-For b20a261fdf, we use the first 360 frames, due to an abrupt jump/teleportation in the trajectory post frame 360. Please note that ScanNet++ was primarily intended as a NeRF Training & Novel View Synthesis dataset.
+To extract the ground-truth semantic masks, please follow the guidelines on its [official repo](https://github.com/scannetpp/scannetpp)
 
-### Replica-V2
+## Usage
 
-We use the Replica-V2 dataset from vMAP to evaluate novel view synthesis. Please download the pre-generated replica sequences from <a href="https://github.com/kxhit/vMAP">vMAP</a>.
+<p align="center">
+  <a href="">
+    <img src="./assets/demo2.gif" alt="Logo" width="100%">
+  </a>
+</p>
 
-## Benchmarking
 
-For running SplaTAM, we recommend using [weights and biases](https://wandb.ai/) for the logging. This can be turned on by setting the `wandb` flag to True in the configs file. Also make sure to specify the path `wandb_folder`. If you don't have a wandb account, first create one. Please make sure to change the `entity` config to your wandb account. Each scene has a config folder, where the `input_folder` and `output` paths need to be specified. 
+We use the Replica dataset as an example. Similar approaches apply to other datasets as well.
 
-Below, we show some example run commands for one scene from each dataset. After SLAM, the trajectory error will be evaluated along with the rendering metrics. The results will be saved to `./experiments` by default.
-
-### Replica
-
-To run SplaTAM on the `room0` scene, run the following command:
-
-```bash
-python scripts/splatam.py configs/replica/splatam.py
-```
-
-To run SplaTAM-S on the `room0` scene, run the following command:
+Run the slam system:
 
 ```bash
-python scripts/splatam.py configs/replica/splatam_s.py
+python scripts/slam.py configs/replica/slam.py
 ```
 
-For other scenes, please modify the `configs/replica/splatam.py` file or use `configs/replica/replica.bash`.
+Run the post optimization after the slam system:
+```bash
+python scripts/post_slam_opt.pt configs/replica/post_slam_opt.py
+```
 
-### TUM-RGBD
+Visualize the reconstruction in an online mannar:
+```bash
+python viz_scripts/online_recon.py configs/replica/slam.py
+```
 
-To run SplaTAM on the `freiburg1_desk` scene, run the following command:
+Visualize the final reconstructed scenes and manipulate the scene:
 
 ```bash
-python scripts/splatam.py configs/tum/splatam.py
+python viz_scripts/tk_recon.py configs/replica/slam.py
 ```
 
-For other scenes, please modify the `configs/tum/splatam.py` file or use `configs/tum/tum.bash`.
 
-### ScanNet
+## Logging
 
-To run SplaTAM on the `scene0000_00` scene, run the following command:
+We use [weights and biases](https://wandb.ai/) for the logging. To enable this, set the `wandb` flag to True in the configuration file and specify the `wandb_folder` path. Make sure to adjust the `entity` configuration to match your account. Each scene is associated with a config folder where you must define the `input_folder` and `output` paths.
 
-```bash
-python scripts/splatam.py configs/scannet/splatam.py
-```
-
-For other scenes, please modify the `configs/scannet/splatam.py` file or use `configs/scannet/scannet.bash`.
-
-### ScanNet++
-
-To run SplaTAM on the `8b5caf3398` scene, run the following command:
-
-```bash
-python scripts/splatam.py configs/scannetpp/splatam.py
-```
-
-To run Novel View Synthesis on the `8b5caf3398` scene, run the following command:
-
-```bash
-python scripts/eval_novel_view.py configs/scannetpp/eval_novel_view.py
-```
-
-For other scenes, please modify the `configs/scannetpp/splatam.py` file or use `configs/scannetpp/scannetpp.bash`.
-
-### ReplicaV2
-
-To run SplaTAM on the `room0` scene, run the following command:
-
-```bash
-python scripts/splatam.py configs/replica_v2/splatam.py
-```
-
-To run Novel View Synthesis on the `room0` scene post SplaTAM, run the following command:
-
-```bash
-python scripts/eval_novel_view.py configs/replica_v2/eval_novel_view.py
-```
-
-For other scenes, please modify the config files.
 
 ## Acknowledgement
 
-We thank the authors of the following repositories for their open-source code:
+Our work is based on [SplaTAM](https://github.com/spla-tam/SplaTAM), and by using or modifying this work further, you agree to adhere to their terms of usage and include the license file. We extend our sincere gratitude for their outstanding contributions. We would also like to thank the authors of the following repositories for making their code available as open-source:
 
-- 3D Gaussians
-  - [Dynamic 3D Gaussians](https://github.com/JonathonLuiten/Dynamic3DGaussians)
-  - [3D Gaussian Splating](https://github.com/graphdeco-inria/gaussian-splatting)
-- Dataloaders
-  - [GradSLAM & ConceptFusion](https://github.com/gradslam/gradslam/tree/conceptfusion)
-- Baselines
-  - [Nice-SLAM](https://github.com/cvg/nice-slam)
-  - [Point-SLAM](https://github.com/eriksandstroem/Point-SLAM)
+- [Dynamic 3D Gaussians](https://github.com/JonathonLuiten/Dynamic3DGaussians)
+- [3D Gaussian Splating](https://github.com/graphdeco-inria/gaussian-splatting)
+- [GradSLAM & ConceptFusion](https://github.com/gradslam/gradslam/tree/conceptfusion)
+- [Semantic-NeRF](https://github.com/Harry-Zhi/semantic_nerf)
+- [Nice-SLAM](https://github.com/cvg/nice-slam)
+- [vMap](https://github.com/kxhit/vMAP)
+- [ESLAM](https://github.com/idiap/ESLAM)
+- [Point-SLAM](https://github.com/eriksandstroem/Point-SLAM)
 
 ## Citation
 
-If you find our paper and code useful, please cite us:
+If you find our work useful, please kindly cite us:
 
 ```bib
-@article{keetha2023splatam,
-    author    = {Keetha, Nikhil and Karhade, Jay and Jatavallabhula, Krishna Murthy and Yang, Gengshan and Scherer, Sebastian and Ramanan, Deva and Luiten, Jonathan}
-    title     = {SplaTAM: Splat, Track & Map 3D Gaussians for Dense RGB-D SLAM},
-    journal   = {arXiv},
-    year      = {2023},
+@article{li2024sgs,
+  title={Sgs-slam: Semantic gaussian splatting for neural dense slam},
+  author={Li, Mingrui and Liu, Shuhong and Zhou, Heng},
+  journal={arXiv preprint arXiv:2402.03246},
+  year={2024}
 }
 ```
-
-## Developers
-- [Nik-V9](https://github.com/Nik-V9) ([Nikhil Keetha](https://nik-v9.github.io/))
-- [JayKarhade](https://github.com/JayKarhade) ([Jay Karhade](https://jaykarhade.github.io/))
-- [JonathonLuiten](https://github.com/JonathonLuiten) ([Jonathan Luiten](https://www.vision.rwth-aachen.de/person/216/))
-- [krrish94](https://github.com/krrish94) ([Krishna Murthy Jatavallabhula](https://krrish94.github.io/))
-- [gengshan-y](https://github.com/gengshan-y) ([Gengshan Yang](https://gengshan-y.github.io/))

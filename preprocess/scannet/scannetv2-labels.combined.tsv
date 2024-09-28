@@ -52,7 +52,7 @@ id	raw_category	category	count	nyu40id	eigen13id	nyuClass	nyu40class	eigen13clas
 32	clothing	clothes	165	21	7	clothes	clothes	Objects					n02728440	apparel.n.01	clothes	38
 101	telephone	telephone	164	40	7	telephone	otherprop	Objects			telephone	4401088	n04401088	telephone.n.01	objects	39
 130	cup	cup	157	40	7	cup	otherprop	Objects	cup		cup or mug	3797390	n03797390	mug.n.04	objects	39
-27	refrigerator	refrigerator	154	24	6	refridgerator	refridgerator	Furniture					n04070727	refrigerator.n.01	appliances	37
+27	refrigerator	refrigerator	154	24	6	refrigerator	refrigerator	Furniture					n04070727	refrigerator.n.01	appliances	37
 44	end table	end table	147	7	10	table	table	Table	table	table	table	4379243	n04379243	table.n.02	table	5
 131	jacket	jacket	146	40	7	jacket	otherprop	Objects					n03589791	jacket.n.01	clothes	38
 55	shower curtain	shower curtain	144	28	7	shower curtain	shower curtain	Objects	curtain				n04209239	shower_curtain.n.01	curtain	12

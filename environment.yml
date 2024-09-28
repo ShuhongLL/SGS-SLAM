@@ -1,4 +1,4 @@
-name: splatam
+name: sgs-slam
 channels:
   - pytorch
   - conda-forge

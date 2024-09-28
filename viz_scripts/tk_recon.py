@@ -341,20 +341,6 @@ def visualize(scene_path, cfg):
     else:
         view_w2c = w2c
 
-    # office 0
-    # view_w2c = torch.tensor([
-    #     [ 0.70209127, -0.13496379, -0.69917996,  0.43850798],
-    #     [-0.71173069, -0.16405851, -0.68302579,  0.66471529],
-    #     [-0.02252267,  0.97717428, -0.21124192,  2.99909543],
-    #     [ 0.,          0.,          0.,          1.,       ]])
-
-    # room 1
-    view_w2c = torch.tensor([
-        [-0.8013449,   0.12381213,  0.58524944,  0.49100344],
-        [ 0.59813435,  0.15106045,  0.78702988, -0.84853509],
-        [ 0.0090358,   0.98074018, -0.1951078,   3.51860213],
-        [ 0.,          0.,          0.,          1.        ]])
-
     cparams.extrinsic = view_w2c
     cparams.intrinsic.intrinsic_matrix = view_k
     cparams.intrinsic.height = int(cfg['viz_h'] * cfg['view_scale'])
@@ -364,12 +350,7 @@ def visualize(scene_path, cfg):
     render_options = vis.get_render_option()
     render_options.point_size = cfg['view_scale']
     render_options.light_on = False
-
-    # if load_semantics:
-    #     semantic_exclude = [32] #[38]
-    #     semantic_exclude = torch.tensor(semantic_exclude).cuda()
-    #     for to_remove_id in semantic_exclude:
-    #         render_mask &= (semantic_ids.squeeze() != to_remove_id)
+    render_options.background_color = [0.0, 0.0, 0.0]
 
     render_mode = cfg['render_mode']
     delta_trans = 0.2
@@ -415,9 +396,6 @@ def visualize(scene_path, cfg):
                     w2c = rotate_camera_y(w2c, msg['payload']['factor'] * delta_rotate)
                 elif msg['payload']['direction'] == 'Z':
                     w2c = rotate_camera_z(w2c, msg['payload']['factor'] * delta_rotate)
-        
-        y_limit = scene_data['means3D'][:, 1] >= -1.35 # -1.05
-        render_mask = render_mask & y_limit
 
         if render_mode == 'centers':
             pts = o3d.utility.Vector3dVector(scene_data['means3D'][render_mask].contiguous().double().cpu().numpy())
