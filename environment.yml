@@ -17,6 +17,7 @@ dependencies:
   - matplotlib
   - kornia
   - natsort
+  - plyfile
   - pyyaml
   - wandb
   - pip

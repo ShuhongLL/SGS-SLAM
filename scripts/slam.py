@@ -7,12 +7,7 @@ import pandas as pd
 from importlib.machinery import SourceFileLoader
 
 _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
 sys.path.insert(0, _BASE_DIR)
-
-print("System Paths:")
-for p in sys.path:
-    print(p)
 
 import cv2
 import matplotlib.pyplot as plt

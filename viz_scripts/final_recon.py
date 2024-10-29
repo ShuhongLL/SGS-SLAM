@@ -324,20 +324,6 @@ def visualize(scene_path, cfg):
     else:
         view_w2c = w2c
 
-    # view_w2c_horizontal = np.array([
-    #     [1, 0, 0, 0],
-    #     [0, 1, 0, 0],
-    #     [0, 0, -1, 1],
-    #     [0, 0, 0, 1]
-    # ])
-
-    # view_w2c_vertical = np.array([
-    #     [ 1,  0,  0,  0],
-    #     [ 0,  0, -1,  0],
-    #     [ 0, -1,  0,  3],
-    #     [ 0,  0,  0,  1]
-    # ])
-
     cparams.extrinsic = view_w2c
     cparams.intrinsic.intrinsic_matrix = view_k
     cparams.intrinsic.height = int(cfg['viz_h'] * cfg['view_scale'])

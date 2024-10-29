@@ -7,7 +7,7 @@ scenes = ["room0", "room1", "room2", "office0", "office1", "office2",
 
 primary_device="cuda:0"
 seed = 0
-scene_name = "apartment_2"
+scene_name = "room0"
 
 map_every = 1
 keyframe_every = 5
@@ -54,7 +54,7 @@ config = dict(
         start=0,
         end=-1,
         stride=1,
-        num_frames=-1,
+        num_frames=-1, # Set to -1 to use all frames
         load_semantics=True,
         num_semantic_classes=101
     ),
@@ -69,7 +69,7 @@ config = dict(
         loss_weights=dict(
             im=0.5,
             depth=1.0,
-            seg=0.05, # 0.1
+            seg=0.05,
         ),
         lrs=dict(
             means3D=0.0,
@@ -138,7 +138,7 @@ config = dict(
         view_scale=2,
         viz_fps=5, # FPS for Online Recon Viz
         enter_interactive_post_online=True, # Enter Interactive Mode after Online Recon Viz
-        scene_name = scene_name,
+        scene_name=scene_name,
         load_semantics=True, # Whether load semantic information
     ),
 )

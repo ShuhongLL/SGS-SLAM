@@ -64,10 +64,10 @@ We present SGS-SLAM, the first semantic visual SLAM system based on [3D Gaussian
 ## Installation
 
 ```bash
-conda create -n sgs-slam python=3.10
+conda create -n sgs-slam python=3.9
 conda activate sgs-slam
-conda install -c "nvidia/label/cuda-11.6.0" cuda-toolkit
-conda install pytorch==1.12.1 torchvision==0.13.1 torchaudio==0.12.1 cudatoolkit=11.6 -c pytorch -c conda-forge
+conda install -c "nvidia/label/cuda-11.8.0" cuda-toolkit
+conda install pytorch==2.0.1 torchvision==0.15.2 torchaudio==2.0.2 cudatoolkit=11.8 pytorch-cuda=11.8 -c pytorch -c nvidia
 pip install -r requirements.txt
 ```
 
@@ -157,7 +157,7 @@ python scripts/slam.py configs/replica/slam.py
 
 Run the post optimization after the slam system:
 ```bash
-python scripts/post_slam_opt.pt configs/replica/post_slam_opt.py
+python scripts/post_slam_opt.py configs/replica/post_slam_opt.py
 ```
 
 Visualize the reconstruction in an online mannar:
@@ -171,10 +171,13 @@ Visualize the final reconstructed scenes and manipulate the scene:
 python viz_scripts/tk_recon.py configs/replica/slam.py
 ```
 
+## Saving and Visualization
+
+By default, the system stores the reconstructed scenes in `.npz` format, which includes both appearance and semantic features. Additionally, we save the final RGB and semantic maps in `.ply` format for easier visualization. You can view the scenes using any 3DGS viewer, such as [SuperSplat](https://playcanvas.com/supersplat/editor/). For interactive rendering, as illustrated above, we adopt the Open3D viewer from [SplaTAM](https://github.com/spla-tam/SplaTAM).
 
 ## Logging
 
-We use [weights and biases](https://wandb.ai/) for the logging. To enable this, set the `wandb` flag to True in the configuration file and specify the `wandb_folder` path. Make sure to adjust the `entity` configuration to match your account. Each scene is associated with a config folder where you must define the `input_folder` and `output` paths.
+We use [weights and biases](https://wandb.ai/) for the logging. To enable this, set the `wandb` flag to True in the configuration file and specify the `wandb_folder` path. Make sure to adjust the `entity` configuration to match your account. Each scene is associated with a config folder where you must define the `input_folder` and `output` paths. Setting `wandb=False` to disable the online logging.
 
 
 ## Acknowledgement

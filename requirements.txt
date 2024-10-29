@@ -9,6 +9,7 @@ pyyaml
 pandas
 wandb
 lpips
+plyfile
 open3d==0.16.0
 torchmetrics
 cyclonedds

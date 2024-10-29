@@ -9,7 +9,6 @@ _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 sys.path.insert(0, _BASE_DIR)
 
-print("System Paths:")
 for p in sys.path:
     print(p)
 

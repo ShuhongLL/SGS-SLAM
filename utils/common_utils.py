@@ -39,12 +39,11 @@ def save_params(output_params, output_dir, save_ply=True):
     # Save the Parameters containing the Gaussian Trajectories
     os.makedirs(output_dir, exist_ok=True)
     print(f"Saving parameters to: {output_dir}")
+    save_path = os.path.join(output_dir, "params.npz")
+    np.savez(save_path, **to_save)
     if save_ply:
         convert(to_save, os.path.join(output_dir, "params.ply"), is_semantic=False)
-        convert(to_save, os.path.join(output_dir, "seg_params.ply"), is_semantic=True)
-    else:
-        save_path = os.path.join(output_dir, "params.npz")
-        np.savez(save_path, **to_save)
+        convert(to_save, os.path.join(output_dir, "seg_params.ply"), is_semantic=True)        
 
 
 def save_params_ckpt(output_params, output_dir, time_idx):
