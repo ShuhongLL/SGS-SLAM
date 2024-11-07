@@ -677,7 +677,12 @@ def rgbd_slam(config: dict):
         print(f"Loading Checkpoint for Frame {checkpoint_time_idx}")
         ckpt_path = os.path.join(config['workdir'], config['run_name'], f"params{checkpoint_time_idx}.npz")
         params = dict(np.load(ckpt_path, allow_pickle=True))
-        params = {k: torch.tensor(params[k]).to(device).float().requires_grad_(True) for k in params if k not in params_opt_exclude}
+        for k in params:
+            if k not in params_opt_exclude:
+                params[k] = torch.tensor(params[k]).to(device).float().requires_grad_(True)
+            else:
+                params[k] = torch.tensor(params[k]).to(device).float()
+
         variables['max_2D_radius'] = torch.zeros(params['means3D'].shape[0]).to(device).float()
         variables['means2D_gradient_accum'] = torch.zeros(params['means3D'].shape[0]).to(device).float()
         variables['denom'] = torch.zeros(params['means3D'].shape[0]).to(device).float()
