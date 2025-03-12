@@ -201,10 +201,12 @@ Our work is based on [SplaTAM](https://github.com/spla-tam/SplaTAM), and by usin
 If you find our work useful, please kindly cite us:
 
 ```bib
-@article{li2024sgs,
+@inproceedings{li2024sgs,
   title={Sgs-slam: Semantic gaussian splatting for neural dense slam},
   author={Li, Mingrui and Liu, Shuhong and Zhou, Heng and Zhu, Guohao and Cheng, Na and Deng, Tianchen and Wang, Hongyu},
-  journal={arXiv preprint arXiv:2402.03246},
-  year={2024}
+  booktitle={European Conference on Computer Vision},
+  pages={163--179},
+  year={2024},
+  organization={Springer}
 }
 ```
