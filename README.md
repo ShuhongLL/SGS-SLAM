@@ -107,12 +107,12 @@ python preprocess/scannet/run.py --input_folder [input path] --output_folder [ou
             │   ├── 1.png
             │   └── ...
             ├── semantic_id
-            │   ├── 0.jpg
-            │   ├── 1.jpg
+            │   ├── 0.png
+            │   ├── 1.png
             │   └── ...
             ├── semantic_color
-            │   ├── 0.jpg
-            │   ├── 1.jpg
+            │   ├── 0.png
+            │   ├── 1.png
             │   └── ...
             ├── intrinsic
             └── pose
