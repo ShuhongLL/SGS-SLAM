@@ -98,23 +98,27 @@ python preprocess/scannet/run.py --input_folder [input path] --output_folder [ou
   DATAROOT
   └── scannet
         └── scene0000_00
-            └── frames
-                ├── color
-                │   ├── 0.jpg
-                │   ├── 1.jpg
-                │   ├── ...
-                │   └── ...
-                ├── depth
-                │   ├── 0.png
-                │   ├── 1.png
-                │   ├── ...
-                │   └── ...
-                ├── intrinsic
-                └── pose
-                    ├── 0.txt
-                    ├── 1.txt
-                    ├── ...
-                    └── ...
+            ├── color
+            │   ├── 0.jpg
+            │   ├── 1.jpg
+            │   └── ...
+            ├── depth
+            │   ├── 0.png
+            │   ├── 1.png
+            │   └── ...
+            ├── semantic_id
+            │   ├── 0.jpg
+            │   ├── 1.jpg
+            │   └── ...
+            ├── semantic_color
+            │   ├── 0.jpg
+            │   ├── 1.jpg
+            │   └── ...
+            ├── intrinsic
+            └── pose
+                ├── 0.txt
+                ├── 1.txt
+                └── ...
 ```
 </details>
 
