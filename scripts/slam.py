@@ -201,7 +201,7 @@ def initialize_first_timestep(dataset, num_frames, scene_radius_depth_ratio, mea
     
     if load_semantics:
         semantic_id = semantic_id.permute(2, 0, 1) # (H, W, 1) -> (1, H, W)
-        semantic_color = semantic_color.permute(2, 0, 1) # (H, W, 3) -> (3, H, W)
+        semantic_color = semantic_color.permute(2, 0, 1) / 255 # (H, W, 3) -> (3, H, W)
     else:
         semantic_id = None
         semantic_color = None
