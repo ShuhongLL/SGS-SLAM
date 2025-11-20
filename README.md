@@ -10,7 +10,7 @@
   <p align="center">
     (*equal contribution)
   </p>
-  <h3 align="center"><a href="https://arxiv.org/pdf/2402.03246">Paper</a> | <a href="https://www.youtube.com/watch?v=y83yw1E-oUo">Video</a> | <a href="https://www.dropbox.com/scl/fo/a93xhcpsteumsmw8oq4jc/ALD5oq6MfkKTpT_7K5cDqhQ?rlkey=hblzvi1m9pcqmksgzs9ydwdxp&st=uvjz1fec&dl=0">Replica Dataset</a>
+  <h3 align="center"><a href="https://arxiv.org/pdf/2402.03246">Paper</a> | <a href="https://www.youtube.com/watch?v=y83yw1E-oUo">Video</a> | <a href="https://drive.google.com/drive/folders/1-o4iFl53QeYD907azv_e8rI4aVDDvLwT">Replica Dataset</a>
   <div align="center"></div>
 </p>
 
